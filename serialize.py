@@ -6,11 +6,17 @@ class PLNode:
     def __init__(self, docId, occurrences):
         self.docId = docId
         self.occurrences = occurrences
-
+    def __eq__(self, value):
+        if self.docId != value.docId:
+            return False
+        if self.occurrences != value.occurrences:
+            return False
+        return True
+            
 class IndexSerializer(object):
     
     @staticmethod
-    def serialize(PostingList):
+    def serialize(PostingList, with_skip = True):
         # byte = bytes()
         skipDictionary = {}
         idx = 0
@@ -22,52 +28,63 @@ class IndexSerializer(object):
             for i in plnode.occurrences:
                 for j in i:
                     listByte += j.to_bytes(4, "big")
+            
+            if with_skip:
+                if idx == SKIPSIZE:
+                    skipDictionary[plnode.docId] = length
+                    idx = 0
+                    # length = 0
+                else:
+                    idx += 1
+                    length += (4+len(plnode.occurrences)*8)
 
-            if idx == SKIPSIZE:
-                skipDictionary[plnode.docId] = length
-                idx = 0
-                # length = 0
-            else:
-                idx += 1
-                length += (4+len(plnode.occurrences)*8)
+        if with_skip:
+            # print(skipDictionary)
+            dictByte = bytes()
+            dictByte += len(skipDictionary).to_bytes(4, "big")
+            for key in skipDictionary:
+                dictByte += key.to_bytes(4, "big")
+                dictByte += skipDictionary[key].to_bytes(4, "big")
 
-        # print(skipDictionary)
-        dictByte = bytes()
-        dictByte += len(skipDictionary).to_bytes(4, "big")
-        for key in skipDictionary:
-            dictByte += key.to_bytes(4, "big")
-            dictByte += skipDictionary[key].to_bytes(4, "big")
+            return dictByte + listByte
 
-        return dictByte + listByte
+        return listByte
 
     @staticmethod
-    def deserialize(byte):
-        dictLen = int.from_bytes(byte[:4], "big")
-        skipDictionary = {}
-        idx = 4
-        for i in range(dictLen):
-            skipDictionary[int.from_bytes(
-                byte[idx:idx+4], "big")] = int.from_bytes(byte[idx+4:idx+8], "big")
-            idx += 8
-        print(dictLen)
-        print(skipDictionary)
+    def deserialize(byte, with_skip = True):
+        if with_skip:
+            dictLen = int.from_bytes(byte[:4], "big")
+            skipDictionary = {}
+            idx = 4
+            for i in range(dictLen):
+                skipDictionary[int.from_bytes(
+                    byte[idx:idx+4], "big")] = int.from_bytes(byte[idx+4:idx+8], "big")
+                idx += 8
+            # print(dictLen)
+            # print(skipDictionary)
+        else:
+            idx = 0
+
         postingList = []
         while(idx < len(byte)):
             docId = int.from_bytes(byte[idx:idx+4], "big")
             idx += 4
             occLen = int.from_bytes(byte[idx:idx+4], "big")
             idx += 4
-            print("{0} {1}".format(docId, occLen))
+            # print("{0} {1}".format(docId, occLen))
             occurrencelist = []
             for i in range(occLen):
                 occurrencelist.append([int.from_bytes(
                     byte[idx:idx+4], "big"), int.from_bytes(byte[idx+4:idx+8], "big")])
                 idx += 8
             postingList.append(PLNode(docId, occurrencelist))
-            print(docId)
-            print(occurrencelist)
-
-        return skipDictionary, postingList
+            # print(docId)
+            # print(occurrencelist)
+        
+        if with_skip:
+            return skipDictionary, postingList
+        
+        return postingList
 
 
 if __name__ == "__main__":
@@ -90,9 +107,10 @@ if __name__ == "__main__":
 
     # print(len(pln1.occurrences))
     # print(len(pln2.occurrences))
-    byte = IndexSerializer.serialize(pl)
-    print(byte)
-    IndexSerializer.deserialize(byte)
+    byte = IndexSerializer.serialize(pl, False)
+    # print(byte)
+    a = IndexSerializer.deserialize(byte, False)
+    print(a == pl)
 
 # b = pln1.docId.to_bytes(4, "big")
 # # b += bytes(pln1.occurrences)
