@@ -4,6 +4,7 @@ import os
 import pickle
 import struct
 import heapq
+from collections import Counter
 from parse_html import Parser
 from serialize import IndexSerializer, PLNode
 
@@ -112,7 +113,10 @@ class IndexConstructor(object):
         
         f.write(binarray)
 
-    
+    def _append_anchor_record(self, f, wid, docIds):
+        f.write(IndexSerializer.simple_serialize(wid))
+        f.write(IndexSerializer.simple_serialize(docIds))
+
     def _append_doc_record(self, docid, num_words, url):
         doc_record_template = '>III{}s' # docid, num_words, len(url), url
         bin_format = doc_record_template.format(len(url))
@@ -122,18 +126,54 @@ class IndexConstructor(object):
     def _merge_anchor_index(self):
         name = '.tmp.{}.'+f'{self.file_prefix}.anchor.idx'
         self.anchor_files = [open(name.format(i), 'r') for i in range(self.tempfile_counter)]
+        
+        def read_next_heapitem(files, i, word2id):
+            if files[i] is None:
+                return None
+            line = files[i].readline().strip()
+            if len(line) == 0:
+                print('finish anchor file ', i)
+                files[i] = None
+            a = line.split(' ', 1)
+            return word2id[a[0]], i, a[1]
 
+        # initialize heap
+        heap = []
+        for i in range(len(self.anchor_files)):
+            a = read_next_heapitem(self.anchor_files, i, self.word2id)
+            if a:
+                heapq.heappush(heap, a)
+        
+        
+        with open(f'{self.file_prefix}.anchor.idx', 'wb') as anchorFile:
+            while heap:
+                currid = heap[0][0]
+                counter = Counter()
+                while heap and heap[0][0] == currid: # merge same word
+                    filei = heap[0][1]
+                    urls = map(lambda u: self.url2docid[u], filter(lambda u: u in self.url2docid, heap[0][2].split()))
+                    counter.update(urls)
+
+                    a = read_next_heapitem(self.anchor_files, filei, self.word2id)
+                    if a:
+                        heapq.heappush(heap, a)
+                    else:
+                        heapq.heappop(heap)
+                # write record
+                self._append_anchor_record(anchorFile, currid, counter)
+
+        for f in self.anchor_files:
+            f.close()
 
     def merge_index(self):
         self.word2id = {}
-        self.urlset = set()
+        self.url2docid = {}
     # 外循环：归并每个word
     # 内循环：归并单个word的多个postinglist
     # 处理完一个word以后，++wordCount产生新的wordId；
     # 处理完一个word以后，压缩它的postinglist写出到全量索引文件；
     # 处理完所有word以后，保存gensim.Dictionary文件；
     # 对于AnchorWordIndex，处理逻辑同上，只不过需要将url替换为docId再写出；
-
 if __name__ == '__main__':
     dir = sys.argv[1]
     constructor = IndexConstructor('test')

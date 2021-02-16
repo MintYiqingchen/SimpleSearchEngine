@@ -1,6 +1,6 @@
 import os
 import json
-
+import struct
 SKIPSIZE = 3
 class PLNode:
     def __init__(self, docId, occurrences):
@@ -14,7 +14,18 @@ class PLNode:
         return True
             
 class IndexSerializer(object):
-    
+    @staticmethod
+    def simple_serialize(obj):
+        if isinstance(obj, str):
+            return struct.pack('>I', len(obj)) + obj.encode()
+        if isinstance(obj, int):
+            return struct.pack('>I', obj)
+        if isinstance(obj, list): # only list[int]
+            return IndexSerializer.generic_serialize(len(obj)) + b''.join(IndexSerializer.generic_serialize(item) for item in obj)
+        if isinstance(obj, dict): # only dick[int]->int
+            return IndexSerializer.generic_serialize(len(obj)) + b''.join(IndexSerializer.generic_serialize(k) + IndexSerializer.generic_serialize(v) for k, v in obj.items())
+        raise NotImplementedError
+
     @staticmethod
     def serialize(PostingList, with_skip = True):
         # byte = bytes()
