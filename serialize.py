@@ -2,21 +2,14 @@ import os
 import json
 
 SKIPSIZE = 3
-
-
 class PLNode:
-
     def __init__(self, docId, occurrences):
         self.docId = docId
         self.occurrences = occurrences
 
-
-class indexConstructor:
-
-    def __init__(self, wordIndex, anchorIndex):
-        self.wordIndex = wordIndex
-        self.anchorIndex = anchorIndex
-
+class IndexSerializer(object):
+    
+    @staticmethod
     def serialize(PostingList):
         # byte = bytes()
         skipDictionary = {}
@@ -47,6 +40,7 @@ class indexConstructor:
 
         return dictByte + listByte
 
+    @staticmethod
     def deserialize(byte):
         dictLen = int.from_bytes(byte[:4], "big")
         skipDictionary = {}
@@ -96,9 +90,9 @@ if __name__ == "__main__":
 
     # print(len(pln1.occurrences))
     # print(len(pln2.occurrences))
-    byte = indexConstructor.serialize(pl)
+    byte = IndexSerializer.serialize(pl)
     print(byte)
-    indexConstructor.deserialize(byte)
+    IndexSerializer.deserialize(byte)
 
 # b = pln1.docId.to_bytes(4, "big")
 # # b += bytes(pln1.occurrences)
