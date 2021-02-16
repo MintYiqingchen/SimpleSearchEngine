@@ -11,15 +11,16 @@ from gensim.parsing.porter import PorterStemmer
 
 
 class Parser:
-    def __init__(self, file_dict):
-        self.url = file_dict['url']
-        self.content = file_dict['content']
+    def reset(self, content):
+        self.content = content
         self.soup = BeautifulSoup(self.content, 'html.parser')
         self.base_text_dict = defaultdict(list)  # k:word, v:occurrencelist}
         # self.anchor_dict = {}
         self.anchor_dict = defaultdict(list)  # {k: word, v:urllist}
 
-    def parse(self):
+    def parse(self, content):
+        self.reset(content)
+
         for tag in self.soup.find_all(['style', 'script']):
             tag.decompose()
 
