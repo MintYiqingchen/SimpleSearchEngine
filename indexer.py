@@ -123,24 +123,26 @@ class IndexConstructor(object):
         record_struct = struct.Struct(bin_format)
         self.doc_table_file.write(record_struct.pack(docid, num_words, len(url),url.encode()))
 
+    def _append_dict_record(self, f, word, indexOffset):
+        f.write(IndexSerializer.simple_serialize(word))
+        f.write(struct.pack('>Q', indexOffset))
+
     def _merge_anchor_index(self):
         name = '.tmp.{}.'+f'{self.file_prefix}.anchor.idx'
-        self.anchor_files = [open(name.format(i), 'r') for i in range(self.tempfile_counter)]
+        anchor_files = [open(name.format(i), 'r') for i in range(self.tempfile_counter)]
         
         def read_next_heapitem(files, i, word2id):
-            if files[i] is None:
-                return None
             line = files[i].readline().strip()
             if len(line) == 0:
                 print('finish anchor file ', i)
-                files[i] = None
+                return None
             a = line.split(' ', 1)
             return word2id[a[0]], i, a[1]
 
         # initialize heap
         heap = []
-        for i in range(len(self.anchor_files)):
-            a = read_next_heapitem(self.anchor_files, i, self.word2id)
+        for i in range(len(anchor_files)):
+            a = read_next_heapitem(anchor_files, i, self.word2id)
             if a:
                 heapq.heappush(heap, a)
         
@@ -154,7 +156,7 @@ class IndexConstructor(object):
                     urls = map(lambda u: self.url2docid[u], filter(lambda u: u in self.url2docid, heap[0][2].split()))
                     counter.update(urls)
 
-                    a = read_next_heapitem(self.anchor_files, filei, self.word2id)
+                    a = read_next_heapitem(anchor_files, filei, self.word2id)
                     if a:
                         heapq.heappush(heap, a)
                     else:
@@ -162,12 +164,95 @@ class IndexConstructor(object):
                 # write record
                 self._append_anchor_record(anchorFile, currid, counter)
 
-        for f in self.anchor_files:
+        for f in anchor_files:
             f.close()
+
+    def _merge_invert_index(self):
+        name = '.tmp.{}.'+f'{self.file_prefix}.invert.idx'
+        index_files = [open(name.format(i), 'rb') for i in range(self.tempfile_counter)]
+
+        def read_next_heapitem(files, i):
+            if files[i] is None:
+                return None
+            rsize = struct.calcsize('>II')
+            buffer = files[i].read(rsize)
+            if len(buffer) < rsize:
+                return None
+            wsize, psize = struct.unpack('>II', buffer)
+            buffer = files[i].read(wsize + psize)
+            if len(buffer) < wsize + psize:
+                return None
+            word = buffer[:wsize].decode()
+            plist = IndexSerializer.deserialize(buffer, False, wsize)
+            return word, i, plist
+
+        # initialize heap
+        heap = []
+        for i in range(len(index_files)):
+            a = read_next_heapitem(index_files, i)
+            if a:
+                heapq.heappush(heap, a)
+        
+        word_count = 0
+        with open(f'{self.file_prefix}.invert.idx', 'wb') as invertFile, \
+            open(f'{self.file_prefix}.dict', 'wb') as dictFile:
+
+            while heap:
+                currword = heap[0][0]
+                plists = []
+                while heap and heap[0][0] == currword: # merge same word
+                    filei = heap[0][1]
+                    plists.append(heap[0][2])
+                    a = read_next_heapitem(index_files, filei)
+                    if a:
+                        heapq.heappush(heap, a)
+                    else:
+                        heapq.heappop(heap)
+
+                plists = self._merge_posting_list(plists)
+                # write record
+                word_count += 1
+                indexOffset = invertFile.tell()
+                self._append_invert_record(invertFile, currword, plists, True, word_count)
+                self._append_dict_record(dictFile, currword, indexOffset)
+                self.word2id[currword] = word_count
+
+        for f in index_files:
+            f.close()
+
+    def _merge_posting_list(self, plists):
+        def read_next_heapitem(plists, i):
+            try:
+                return next(plists[i]), i
+            except StopIteration:
+                return None
+
+        plists = [iter(p) for p in plists]
+        # initialize heap
+        heap = []
+        for i in range(len(plists)):
+            a = read_next_heapitem(plists, i)
+            if a:
+                heapq.heappush(heap, a)
+
+        res = []
+        while heap:
+            res.append(heap[0][0])
+            a = read_next_heapitem(plists, heap[0][1])
+            if a:
+                heapq.heappush(heap, a)
+            else:
+                heapq.heappop(heap)
+
+        return res
 
     def merge_index(self):
         self.word2id = {}
-        self.url2docid = {}
+        self._merge_invert_index()
+
+        self.url2docid = {a[2]: a[0] for a in load_doc_records(self.file_prefix)}
+        self._merge_anchor_index()
+    
     # 外循环：归并每个word
     # 内循环：归并单个word的多个postinglist
     # 处理完一个word以后，++wordCount产生新的wordId；

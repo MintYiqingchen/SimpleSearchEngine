@@ -25,7 +25,13 @@ class IndexSerializer(object):
         if isinstance(obj, dict): # only dick[int]->int
             return IndexSerializer.generic_serialize(len(obj)) + b''.join(IndexSerializer.generic_serialize(k) + IndexSerializer.generic_serialize(v) for k, v in obj.items())
         raise NotImplementedError
-
+    
+    @staticmethod
+    def simple_deserialize(bt, tp, offset = 0):
+        if tp == int:
+            return struct.unpack_from('>I', bt, offset)[0]
+        raise NotImplementedError
+    
     @staticmethod
     def serialize(PostingList, with_skip = True):
         # byte = bytes()
@@ -62,11 +68,11 @@ class IndexSerializer(object):
         return listByte
 
     @staticmethod
-    def deserialize(byte, with_skip = True):
+    def deserialize(byte, with_skip = True, offset = 0):
         if with_skip:
-            dictLen = int.from_bytes(byte[:4], "big")
+            dictLen = int.from_bytes(byte[offset: offset + 4], "big")
             skipDictionary = {}
-            idx = 4
+            idx = offset + 4
             for i in range(dictLen):
                 skipDictionary[int.from_bytes(
                     byte[idx:idx+4], "big")] = int.from_bytes(byte[idx+4:idx+8], "big")
@@ -74,7 +80,7 @@ class IndexSerializer(object):
             # print(dictLen)
             # print(skipDictionary)
         else:
-            idx = 0
+            idx = offset
 
         postingList = []
         while(idx < len(byte)):
