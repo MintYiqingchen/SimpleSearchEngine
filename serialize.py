@@ -12,6 +12,9 @@ class PLNode:
         if self.occurrences != value.occurrences:
             return False
         return True
+
+    def __lt__(self, value):
+        return self.docId < value.docId
             
 class IndexSerializer(object):
     @staticmethod
@@ -21,9 +24,9 @@ class IndexSerializer(object):
         if isinstance(obj, int):
             return struct.pack('>I', obj)
         if isinstance(obj, list): # only list[int]
-            return IndexSerializer.generic_serialize(len(obj)) + b''.join(IndexSerializer.generic_serialize(item) for item in obj)
+            return IndexSerializer.simple_serialize(len(obj)) + b''.join(IndexSerializer.simple_serialize(item) for item in obj)
         if isinstance(obj, dict): # only dick[int]->int
-            return IndexSerializer.generic_serialize(len(obj)) + b''.join(IndexSerializer.generic_serialize(k) + IndexSerializer.generic_serialize(v) for k, v in obj.items())
+            return IndexSerializer.simple_serialize(len(obj)) + b''.join(IndexSerializer.simple_serialize(k) + IndexSerializer.simple_serialize(v) for k, v in obj.items())
         raise NotImplementedError
     
     @staticmethod

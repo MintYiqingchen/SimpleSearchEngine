@@ -4,6 +4,7 @@ import os
 import pickle
 import struct
 import heapq
+import glob
 from collections import Counter
 from parse_html import Parser
 from serialize import IndexSerializer, PLNode
@@ -28,7 +29,6 @@ def load_doc_records(file_prefix):
                 break
             url = struct.unpack(f'>{urllen}s', chk)[0]
             yield docid, num_words, url.decode()
-
 
 class IndexConstructor(object):
     
@@ -123,21 +123,26 @@ class IndexConstructor(object):
         record_struct = struct.Struct(bin_format)
         self.doc_table_file.write(record_struct.pack(docid, num_words, len(url),url.encode()))
 
-    def _append_dict_record(self, f, word, indexOffset):
-        f.write(IndexSerializer.simple_serialize(word))
-        f.write(struct.pack('>Q', indexOffset))
+    def _append_dict_record(self, df, word):
+        df.write(word+'\n')
+
+    def _append_offset_record(self, of, invert_offset, anchor_offset = -1):
+        of.write(struct.pack('>qq', invert_offset, anchor_offset))
 
     def _merge_anchor_index(self):
         name = '.tmp.{}.'+f'{self.file_prefix}.anchor.idx'
         anchor_files = [open(name.format(i), 'r') for i in range(self.tempfile_counter)]
         
         def read_next_heapitem(files, i, word2id):
-            line = files[i].readline().strip()
-            if len(line) == 0:
-                print('finish anchor file ', i)
-                return None
-            a = line.split(' ', 1)
-            return word2id[a[0]], i, a[1]
+            while True:
+                line = files[i].readline().strip()
+                if len(line) == 0:
+                    # print('finish anchor file ', i)
+                    return None
+                a = line.split(' ', 1)
+                if a[0] not in word2id:
+                    continue
+                return word2id[a[0]], i, a[1]
 
         # initialize heap
         heap = []
@@ -162,7 +167,9 @@ class IndexConstructor(object):
                     else:
                         heapq.heappop(heap)
                 # write record
+                fileOffset = anchorFile.tell()
                 self._append_anchor_record(anchorFile, currid, counter)
+                self.offsets[currid][1] = fileOffset
 
         for f in anchor_files:
             f.close()
@@ -195,7 +202,7 @@ class IndexConstructor(object):
         
         word_count = 0
         with open(f'{self.file_prefix}.invert.idx', 'wb') as invertFile, \
-            open(f'{self.file_prefix}.dict', 'wb') as dictFile:
+            open(f'{self.file_prefix}.dict.meta', 'w') as dictFile:
 
             while heap:
                 currword = heap[0][0]
@@ -211,11 +218,12 @@ class IndexConstructor(object):
 
                 plists = self._merge_posting_list(plists)
                 # write record
-                word_count += 1
                 indexOffset = invertFile.tell()
                 self._append_invert_record(invertFile, currword, plists, True, word_count)
-                self._append_dict_record(dictFile, currword, indexOffset)
+                self._append_dict_record(dictFile, currword)
                 self.word2id[currword] = word_count
+                self.offsets.append([indexOffset, -1])
+                word_count += 1
 
         for f in index_files:
             f.close()
@@ -248,27 +256,34 @@ class IndexConstructor(object):
 
     def merge_index(self):
         self.word2id = {}
+        self.offsets = []
         self._merge_invert_index()
 
         self.url2docid = {a[2]: a[0] for a in load_doc_records(self.file_prefix)}
         self._merge_anchor_index()
-    
-    # 外循环：归并每个word
-    # 内循环：归并单个word的多个postinglist
-    # 处理完一个word以后，++wordCount产生新的wordId；
-    # 处理完一个word以后，压缩它的postinglist写出到全量索引文件；
-    # 处理完所有word以后，保存gensim.Dictionary文件；
-    # 对于AnchorWordIndex，处理逻辑同上，只不过需要将url替换为docId再写出；
+
+        with open(f'{self.file_prefix}.offset.meta', 'wb') as offsetFile:
+            for a, b in self.offsets:
+                self._append_offset_record(offsetFile, a, b)
+
+        for fname in glob.iglob('.tmp*.idx'):
+            os.remove(fname)
+    # outer loop：merge word
+    # inner loop：merge postinglists of each word
+    # after handling each word，++wordCount in order to generate new wordId；
+    #   compress postinglist, write to full index file
+    # after handling all words, write out offset file and dictionary
+
 if __name__ == '__main__':
     dir = sys.argv[1]
     constructor = IndexConstructor('test')
-    for subdir in os.listdir(dir):
-        subdir = os.path.join(dir, subdir)
-        for fname in os.listdir(subdir):
-            fname = os.path.join(subdir, fname)
-            constructor.add_file(fname)
-    
+    # for subdir in os.listdir(dir):
+    #     subdir = os.path.join(dir, subdir)
+    #     for fname in os.listdir(subdir):
+    #         fname = os.path.join(subdir, fname)
+    #         constructor.add_file(fname)
+    constructor.tempfile_counter = 3
     constructor.merge_index()
 
-    for a in load_doc_records('test'):
-        print(a)
+    # for a in load_doc_records('test'):
+    #     print(a)
