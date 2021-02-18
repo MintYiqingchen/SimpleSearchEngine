@@ -32,7 +32,7 @@ def load_doc_records(file_prefix):
 
 class IndexConstructor(object):
     
-    def __init__(self, file_prefix, chunksize = (1 << 20)):
+    def __init__(self, file_prefix, chunksize = (1 << 30)):
         # invert index
         self.word_index = {}
         self.anchor_index = {}
@@ -274,16 +274,17 @@ class IndexConstructor(object):
     #   compress postinglist, write to full index file
     # after handling all words, write out offset file and dictionary
 
+# Submit a report (pdf) with the following content: a table with the following numbers pertaining to your index. It should have, at least the number of documents, the number of [unique] words, and the total size (in KB) of your index on disk.
 if __name__ == '__main__':
     dir = sys.argv[1]
     constructor = IndexConstructor('test')
-    # for subdir in os.listdir(dir):
-    #     subdir = os.path.join(dir, subdir)
-    #     for fname in os.listdir(subdir):
-    #         fname = os.path.join(subdir, fname)
-    #         constructor.add_file(fname)
-    constructor.tempfile_counter = 3
+    for subdir in os.listdir(dir):
+        subdir = os.path.join(dir, subdir)
+        for fname in os.listdir(subdir):
+            fname = os.path.join(subdir, fname)
+            constructor.add_file(fname)
+    # constructor.tempfile_counter = 3
     constructor.merge_index()
-
+    print('document number: ', len(constructor.url2docid))
     # for a in load_doc_records('test'):
     #     print(a)
