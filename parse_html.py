@@ -4,6 +4,7 @@ import re
 import string
 from collections import defaultdict
 from gensim.parsing.porter import PorterStemmer
+from string import punctuation as p
 
 # file_dict = {}
 # with open(path, 'rt') as f:
@@ -11,16 +12,15 @@ from gensim.parsing.porter import PorterStemmer
 
 
 class Parser:
-    def reset(self, content):
-        self.content = content
+    def __init__(self, file_dict):
+        self.url = file_dict['url']
+        self.content = file_dict['content']
         self.soup = BeautifulSoup(self.content, 'html.parser')
         self.base_text_dict = defaultdict(list)  # k:word, v:occurrencelist}
         # self.anchor_dict = {}
         self.anchor_dict = defaultdict(list)  # {k: word, v:urllist}
 
-    def parse(self, content):
-        self.reset(content)
-
+    def parse(self):
         for tag in self.soup.find_all(['style', 'script']):
             tag.decompose()
 
@@ -30,7 +30,7 @@ class Parser:
         s_bold = self._get_bold()
         s_italic = self._get_italic()
         text = self._get_text()
-        stemmed_text = self._stem_string(text)
+        stemmed_text = self._stem_string(text, p)
         # print(stemmed_text)
         self._get_base_text_dict(stemmed_text)
         word_pos_dict = self._get_word_pos_dict(stemmed_text)
@@ -59,14 +59,14 @@ class Parser:
         if titles is not None:
             for t in titles:
                 title = t.string
-                tTags.append(self._stem_string(title))
+                tTags.append(self._stem_string(title, p))
         return tTags
 
     def _get_heading(self):
         hTags = []
         for headlings in self.soup.find_all(re.compile('^h[1-6]$')):
             heading = headlings.text.strip()
-            hTags.append(self._stem_string(heading))
+            hTags.append(self._stem_string(heading, p))
         return hTags
 
     # bold word
@@ -74,7 +74,7 @@ class Parser:
         bTags = []
         for i in self.soup.findAll('b'):
             bold = i.text.strip()
-            bTags.append(self._stem_string(bold))
+            bTags.append(self._stem_string(bold, p))
         return bTags
 
     # italic word
@@ -82,7 +82,7 @@ class Parser:
         iTags = []
         for i in self.soup.findAll('i'):
             italic = i.text.strip()
-            iTags.append(self._stem_string(italic))
+            iTags.append(self._stem_string(italic, p))
         return iTags
 
     # anchor word
@@ -90,7 +90,7 @@ class Parser:
         aTags = []
         aUrl = []
         for i in self.soup.findAll('a', href=True):
-            aTags.append(self._stem_string(i.text.strip()))
+            aTags.append(self._stem_string(i.text.strip(), p))
             aUrl.append(i['href'])  # there are non-html content, like email address
         return aTags, aUrl
 
@@ -106,10 +106,11 @@ class Parser:
         else:
             return True
 
-    # input: test
+    # input: text
     # return: cleaned base string "all word context" (NOTE: '\n'etc should be removed)
 
-    def _stem_string(self, text):
+    def _stem_string(self, text, p):
+        punctuation = re.compile('[{}]+'.format(re.escape(p)))
         clean_string = ""
         for line in text.splitlines():
             for word in line.strip().lower().split(" "):
@@ -118,6 +119,7 @@ class Parser:
                 for c in word:
                     if self._isEnglish(c):
                         new_word = new_word + c
+                new_word = punctuation.sub('', new_word)  # added
                 if new_word != "":
                     clean_string = clean_string + " " + new_word
         p = PorterStemmer()
@@ -181,6 +183,10 @@ class Parser:
         self._format_code_helper(clean_string, word_pos_dict, s_bold, 2)
         self._format_code_helper(clean_string, word_pos_dict, s_head, 3)
         self._format_code_helper(clean_string, word_pos_dict, s_title, 4)
+
+
+
+
 
 
 
