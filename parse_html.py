@@ -17,7 +17,6 @@ class Parser:
         self.content = file_dict['content']
         self.soup = BeautifulSoup(self.content, 'html.parser')
         self.base_text_dict = defaultdict(list)  # k:word, v:occurrencelist}
-        # self.anchor_dict = {}
         self.anchor_dict = defaultdict(list)  # {k: word, v:urllist}
 
     def parse(self):
@@ -26,12 +25,10 @@ class Parser:
 
         s_title = self._get_title()
         s_heading = self._get_heading()
-        # print(s_heading)
         s_bold = self._get_bold()
         s_italic = self._get_italic()
         text = self._get_text()
         stemmed_text = self._stem_string(text, p)
-        # print(stemmed_text)
         self._get_base_text_dict(stemmed_text)
         word_pos_dict = self._get_word_pos_dict(stemmed_text)
         self._update_format_code(stemmed_text, word_pos_dict, s_title, s_heading, s_bold, s_italic)
@@ -47,10 +44,6 @@ class Parser:
             for w in aTags[i].strip().split(" "):
                 self.anchor_dict[w].append(aUrl[i])
 
-    #                 if w not in self.anchor_dict:
-    #                     self.anchor_dict[w] = [aUrl[i]]
-    #                 else:
-    #                     self.anchor_dict[w].append(aUrl[i])
 
     # title
     def _get_title(self):
@@ -147,14 +140,6 @@ class Parser:
 
             word_pos_dict[char_index] = i
 
-        # for i in range(1, len(stem_text.split(" "))):
-        #     if i != 1:
-        #         char_index = char_index + word_len + 1
-        #     else:
-        #         char_index = word_len + 1
-        #
-        #     word_pos_dict[char_index] = i
-        #     word_len = len(stem_text.split(" ")[i])
         return word_pos_dict
 
     def _format_code_helper(self, clean_string, word_pos_dict, s, code):
