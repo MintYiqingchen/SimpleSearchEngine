@@ -49,11 +49,11 @@ class Parser:
     # title
     def _get_title(self):
         tTags = []
-        titles = self.soup.find('title')
-        if titles is not None:
-            for t in titles:
-                title = t.string
-                tTags.append(self._stem_string(title, p))
+        titles = self.soup.find_all('title')
+        
+        for t in titles:
+            title = t.text
+            tTags.append(self._stem_string(title, p))
         return tTags
 
     def _get_heading(self):
