@@ -51,6 +51,7 @@ class IndexConstructor(object):
         self.doc_table_file.close()
 
     def add_file(self, filename):
+        print(filename)
         url, content = load_file(filename)
 
         if self.curr_size + len(content) > self.chunksize:
@@ -113,6 +114,7 @@ class IndexConstructor(object):
             binarray = bytearray(len(bin_posting) + word_struct.size)
             word_struct.pack_into(binarray, 0, len(word), len(bin_posting), word.encode())
             binarray[word_struct.size:] = bin_posting
+            print(word)
         
         f.write(binarray)
 
@@ -270,8 +272,8 @@ class IndexConstructor(object):
             for a, b in self.offsets:
                 self._append_offset_record(offsetFile, a, b)
 
-        for fname in glob.iglob('.tmp*.idx'):
-            os.remove(fname)
+        # for fname in glob.iglob('.tmp*.idx'):
+        #     os.remove(fname)
     # outer loop：merge word
     # inner loop：merge postinglists of each word
     # after handling each word，++wordCount in order to generate new wordId；
@@ -282,12 +284,15 @@ class IndexConstructor(object):
 if __name__ == '__main__':
     dir = sys.argv[1]
     constructor = IndexConstructor('test')
+    count = 0
     for subdir in os.listdir(dir):
         subdir = os.path.join(dir, subdir)
         for fname in os.listdir(subdir):
+            count += 1
             fname = os.path.join(subdir, fname)
             constructor.add_file(fname)
-    # constructor.tempfile_counter = 3
+    print("finish parse stage: ", count)
+    
     constructor.merge_index()
     print('document number: ', len(constructor.url2docid))
     # for a in load_doc_records('test'):

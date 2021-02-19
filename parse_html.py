@@ -24,6 +24,10 @@ class Parser:
         for tag in self.soup.find_all(['style', 'script']):
             tag.decompose()
 
+        # filter low info pages or pure data page
+        if not self.soup.html:
+            return {}, {}
+            
         s_title = self._get_title()
         s_heading = self._get_heading()
         s_bold = self._get_bold()
