@@ -30,6 +30,7 @@ def load_doc_records(file_prefix):
             url = struct.unpack(f'>{urllen}s', chk)[0]
             yield docid, num_words, url.decode()
 
+
 class IndexConstructor(object):
     
     def __init__(self, file_prefix, chunksize = (1 << 26)):
@@ -46,17 +47,14 @@ class IndexConstructor(object):
         self.curr_size = 0
         self.parser = Parser()
         self.file_prefix = file_prefix
-        
-    def __del__(self):
-        self.doc_table_file.close()
 
     def add_file(self, filename):
-        print(filename)
         url, content = load_file(filename)
 
         if self.curr_size + len(content) > self.chunksize:
             self._write_temp_index()
-
+        
+        print(filename)
         self.curr_size += len(content)
         word_index, anchor_index = self.parser.parse(content)
         # update invert index

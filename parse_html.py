@@ -5,11 +5,39 @@ import string
 from collections import defaultdict
 from gensim.parsing.porter import PorterStemmer
 from string import punctuation as p
+from urllib.parse import urlparse
 
 # file_dict = {}
 # with open(path, 'rt') as f:
 #     file_dict = json.load(f)
 
+def is_valid(url):
+    if url is None:
+        return False
+
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or parsed.netloc.find('://') != -1:
+            return False
+        # special rules for trash pages:
+        if parsed.path.find('wp-json') != -1: # example: https://ngs.ics.uci.edu/wp-json/wp/v2/posts/1234
+            return False
+        # example: https://wics.ics.uci.edu/events/category/wics-meeting-2/2016-09-30/
+        if parsed.query.find('ical') != -1 or (parsed.netloc == 'wics.ics.uci.edu' and parsed.path.find('event') != -1):
+            return False
+        return not re.match(
+            r".*\.(css|js|bmp|gif|jpe?g|ico"
+            + r"|png|tiff?|mid|mp2|mp3|mp4"
+            + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
+            + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
+            + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
+            + r"|epub|dll|cnf|tgz|sha1|xml|json"
+            + r"|thmx|mso|arff|rtf|jar|csv|embed|ppsx"
+            + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
+
+    except TypeError:
+        print ("TypeError for ", parsed)
+        raise
 
 class Parser:
     def reset(self, content):
@@ -27,7 +55,7 @@ class Parser:
         # filter low info pages or pure data page
         if not self.soup.html:
             return {}, {}
-            
+
         s_title = self._get_title()
         s_heading = self._get_heading()
         s_bold = self._get_bold()
@@ -87,7 +115,7 @@ class Parser:
     def _get_anchor(self):
         aTags = []
         aUrl = []
-        for i in self.soup.findAll('a', href=True):
+        for i in self.soup.find_all(href=is_valid, rel=lambda x: (x is None or x != 'nofollow')):
             aTags.append(self._stem_string(i.text.strip(), p))
             aUrl.append(i['href'])  # there are non-html content, like email address
         return aTags, aUrl
