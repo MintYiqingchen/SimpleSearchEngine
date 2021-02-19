@@ -25,6 +25,9 @@ def is_valid(url):
         # example: https://wics.ics.uci.edu/events/category/wics-meeting-2/2016-09-30/
         if parsed.query.find('ical') != -1 or (parsed.netloc == 'wics.ics.uci.edu' and parsed.path.find('event') != -1):
             return False
+        if parsed.path.find('public_data') != -1:
+            return False
+            
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
             + r"|png|tiff?|mid|mp2|mp3|mp4"

@@ -6,8 +6,9 @@ import struct
 import heapq
 import glob
 from collections import Counter
-from parse_html import Parser
+from parse_html import Parser, is_valid
 from serialize import IndexSerializer, PLNode
+from utils import get_logger
 
 def load_file(filename):
     with open(filename) as f:
@@ -48,8 +49,16 @@ class IndexConstructor(object):
         self.parser = Parser()
         self.file_prefix = file_prefix
 
+        self.logger = get_logger('INDEX_CONSTRUCTOR')
+
     def add_file(self, filename):
         url, content = load_file(filename)
+        if not is_valid(url):
+            self.logger.info(f'{url}, {filename}')
+            return
+        if len(content) >= (1<<25):
+            self.logger.info('too large ', len(content), f' {url}, {fname}')
+            return
 
         if self.curr_size + len(content) > self.chunksize:
             self._write_temp_index()
