@@ -32,7 +32,7 @@ def load_doc_records(file_prefix):
 
 class IndexConstructor(object):
     
-    def __init__(self, file_prefix, chunksize = (1 << 30)):
+    def __init__(self, file_prefix, chunksize = (1 << 26)):
         # invert index
         self.word_index = {}
         self.anchor_index = {}
@@ -84,6 +84,9 @@ class IndexConstructor(object):
         self.curr_size = 0
     
     def _write_temp_index(self):
+        if self.curr_size == 0:
+            return
+
         fname = f'.tmp.{self.tempfile_counter}.{self.file_prefix}.invert.idx'
         with open(fname, 'wb') as f:
             # write word_index
@@ -255,6 +258,7 @@ class IndexConstructor(object):
         return res
 
     def merge_index(self):
+        self._write_temp_index()
         self.word2id = {}
         self.offsets = []
         self._merge_invert_index()
