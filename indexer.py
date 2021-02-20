@@ -41,7 +41,7 @@ class IndexConstructor(object):
         # doc index
         self.doc_counter = 0
         self.docid_table = {}
-        self.doc_table_file = open(f'{file_prefix}.doc2url.idx', 'wb')
+        
         # constructor status
         self.chunksize = chunksize
         self.tempfile_counter = 0
@@ -50,6 +50,8 @@ class IndexConstructor(object):
         self.file_prefix = file_prefix
 
         self.logger = get_logger('INDEX_CONSTRUCTOR')
+    def open_doc2url(self, mode):
+        self.doc_table_file = open(f'{self.file_prefix}.doc2url.idx', mode)
 
     def add_file(self, filename):
         url, content = load_file(filename)
@@ -57,7 +59,7 @@ class IndexConstructor(object):
             self.logger.info(f'{url}, {filename}')
             return
         if len(content) >= (1<<25):
-            self.logger.info('too large ', len(content), f' {url}, {fname}')
+            self.logger.info('too large ', len(content), f' {url}, {filename}')
             return
 
         if self.curr_size + len(content) > self.chunksize:
@@ -175,7 +177,7 @@ class IndexConstructor(object):
 
                     a = read_next_heapitem(anchor_files, filei, self.word2id)
                     if a:
-                        heapq.heappush(heap, a)
+                        heapq.heappushpop(heap, a)
                     else:
                         heapq.heappop(heap)
                 # write record
@@ -218,13 +220,14 @@ class IndexConstructor(object):
 
             while heap:
                 currword = heap[0][0]
+                print(currword)
                 plists = []
                 while heap and heap[0][0] == currword: # merge same word
                     filei = heap[0][1]
                     plists.append(heap[0][2])
                     a = read_next_heapitem(index_files, filei)
                     if a:
-                        heapq.heappush(heap, a)
+                        heapq.heappushpop(heap, a)
                     else:
                         heapq.heappop(heap)
 
@@ -270,9 +273,11 @@ class IndexConstructor(object):
         self._write_temp_index()
         self.word2id = {}
         self.offsets = []
+        print('----- merge invert index -----')
         self._merge_invert_index()
 
         self.url2docid = {a[2]: a[0] for a in load_doc_records(self.file_prefix)}
+        print('----- merge anchor index -----')
         self._merge_anchor_index()
 
         with open(f'{self.file_prefix}.offset.meta', 'wb') as offsetFile:
@@ -291,15 +296,16 @@ class IndexConstructor(object):
 if __name__ == '__main__':
     dir = sys.argv[1]
     constructor = IndexConstructor('test')
-    count = 0
-    for subdir in os.listdir(dir):
-        subdir = os.path.join(dir, subdir)
-        for fname in os.listdir(subdir):
-            count += 1
-            fname = os.path.join(subdir, fname)
-            constructor.add_file(fname)
-    print("finish parse stage: ", count)
-    
+    # constructor.open_doc2url('wb')
+    # count = 0
+    # for subdir in os.listdir(dir):
+    #     subdir = os.path.join(dir, subdir)
+    #     for fname in os.listdir(subdir):
+    #         count += 1
+    #         fname = os.path.join(subdir, fname)
+    #         constructor.add_file(fname)
+    # print("finish parse stage: ", count)
+    constructor.tempfile_counter = 11
     constructor.merge_index()
     print('document number: ', len(constructor.url2docid))
     # for a in load_doc_records('test'):
