@@ -1,7 +1,7 @@
 import os
 import json
 import struct
-SKIPSIZE = 3
+SKIPSIZE = 1024
 class PLNode:
     def __init__(self, docId, occurrences):
         self.docId = docId

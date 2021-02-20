@@ -176,10 +176,9 @@ class IndexConstructor(object):
                     counter.update(urls)
 
                     a = read_next_heapitem(anchor_files, filei, self.word2id)
+                    heapq.heappop(heap)
                     if a:
-                        heapq.heappushpop(heap, a)
-                    else:
-                        heapq.heappop(heap)
+                        heapq.heappush(heap, a)
                 # write record
                 fileOffset = anchorFile.tell()
                 self._append_anchor_record(anchorFile, currid, counter)
@@ -226,10 +225,10 @@ class IndexConstructor(object):
                     filei = heap[0][1]
                     plists.append(heap[0][2])
                     a = read_next_heapitem(index_files, filei)
+                    heapq.heappop(heap)
                     if a:
-                        heapq.heappushpop(heap, a)
-                    else:
-                        heapq.heappop(heap)
+                        heapq.heappush(heap, a)
+                    
 
                 plists = self._merge_posting_list(plists)
                 # write record
@@ -249,6 +248,9 @@ class IndexConstructor(object):
                 return next(plists[i]), i
             except StopIteration:
                 return None
+        
+        # for i, p in enumerate(plists):
+        #     print(i, ':', len(p))
 
         plists = [iter(p) for p in plists]
         # initialize heap
@@ -262,11 +264,10 @@ class IndexConstructor(object):
         while heap:
             res.append(heap[0][0])
             a = read_next_heapitem(plists, heap[0][1])
+            heapq.heappop(heap)
             if a:
                 heapq.heappush(heap, a)
-            else:
-                heapq.heappop(heap)
-
+        print('finish merge posting')
         return res
 
     def merge_index(self):
