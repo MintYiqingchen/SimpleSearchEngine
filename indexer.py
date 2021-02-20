@@ -297,16 +297,16 @@ class IndexConstructor(object):
 if __name__ == '__main__':
     dir = sys.argv[1]
     constructor = IndexConstructor('test')
-    # constructor.open_doc2url('wb')
-    # count = 0
-    # for subdir in os.listdir(dir):
-    #     subdir = os.path.join(dir, subdir)
-    #     for fname in os.listdir(subdir):
-    #         count += 1
-    #         fname = os.path.join(subdir, fname)
-    #         constructor.add_file(fname)
-    # print("finish parse stage: ", count)
-    constructor.tempfile_counter = 11
+    constructor.open_doc2url('wb')
+    count = 0
+    for subdir in os.listdir(dir):
+        subdir = os.path.join(dir, subdir)
+        for fname in os.listdir(subdir):
+            count += 1
+            fname = os.path.join(subdir, fname)
+            constructor.add_file(fname)
+    print("finish parse stage: ", count)
+    # constructor.tempfile_counter = 11
     constructor.merge_index()
     print('document number: ', len(constructor.url2docid))
     # for a in load_doc_records('test'):

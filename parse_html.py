@@ -139,18 +139,20 @@ class Parser:
     # return: cleaned base string "all word context" (NOTE: '\n'etc should be removed)
 
     def _stem_string(self, text, p):
-        punctuation = re.compile('[{}]+'.format(re.escape(p)))
-        clean_string = ""
-        for line in text.splitlines():
-            for word in line.strip().lower().split(" "):
-                word = word.strip(string.punctuation)
-                new_word = ''
-                for c in word:
-                    if self._isEnglish(c):
-                        new_word = new_word + c
-                new_word = punctuation.sub('', new_word)  # added
-                if new_word != "":
-                    clean_string = clean_string + " " + new_word
+        delim = re.compile(r'[\W_]+', re.ASCII)
+
+        # punctuation = re.compile('[{}]+'.format(re.escape(p)))
+        clean_string = delim.sub(' ', text.strip().lower())
+        # for line in text.splitlines():
+        #     for word in line.strip().lower().split(" "):
+        #         word = word.strip(string.punctuation)
+        #         new_word = ''
+        #         for c in word:
+        #             if self._isEnglish(c):
+        #                 new_word = new_word + c
+        #         new_word = punctuation.sub('', new_word)  # added
+        #         if new_word != "":
+        #             clean_string = clean_string + " " + new_word
         p = PorterStemmer()
 
         return p.stem_sentence(clean_string)
