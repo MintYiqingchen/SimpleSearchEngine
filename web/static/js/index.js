@@ -25,10 +25,9 @@ $(document).ready(function () {
         console.log(word);
         $.ajax({
             type: "POST",
-            url: "127.0.0.1:12345/search",
-            data: {
-                "query": $("#input").val(),
-            },
+            url: "/api/search",
+            data: JSON.stringify({ query: $("#input").val() }),
+            contentType: "application/json; charset=utf-8",
             dataType: "json",
         }).done(function (data) {
             let formDiv = $("#result");
