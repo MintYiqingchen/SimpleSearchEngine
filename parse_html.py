@@ -5,48 +5,18 @@ import string
 from collections import defaultdict
 from gensim.parsing.porter import PorterStemmer
 from string import punctuation as p
-from urllib.parse import urlparse
+from utils import is_valid
+from serialize import PLNode
 
 # file_dict = {}
 # with open(path, 'rt') as f:
 #     file_dict = json.load(f)
 
-def is_valid(url):
-    if url is None:
-        return False
-
-    try:
-        parsed = urlparse(url)
-        if parsed.scheme not in {"http", "https"} or parsed.netloc.find('://') != -1:
-            return False
-        # special rules for trash pages:
-        if parsed.path.find('wp-json') != -1: # example: https://ngs.ics.uci.edu/wp-json/wp/v2/posts/1234
-            return False
-        # example: https://wics.ics.uci.edu/events/category/wics-meeting-2/2016-09-30/
-        if parsed.query.find('ical') != -1 or (parsed.netloc == 'wics.ics.uci.edu' and parsed.path.find('event') != -1):
-            return False
-        if parsed.path.find('public_data') != -1:
-            return False
-            
-        return not re.match(
-            r".*\.(css|js|bmp|gif|jpe?g|ico"
-            + r"|png|tiff?|mid|mp2|mp3|mp4"
-            + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
-            + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
-            + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
-            + r"|epub|dll|cnf|tgz|sha1|xml|json"
-            + r"|thmx|mso|arff|rtf|jar|csv|embed|ppsx"
-            + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
-
-    except TypeError:
-        print ("TypeError for ", parsed)
-        raise
-
 class Parser:
     def reset(self, content):
         self.content = content
         self.soup = BeautifulSoup(self.content, 'html.parser')
-        self.base_text_dict = defaultdict(list)  # k:word, v:occurrencelist}
+        self.base_text_dict = {}  # {k:word, v:PLNode}
         self.anchor_dict = defaultdict(list)  # {k: word, v:urllist}
 
     def parse(self, content):
@@ -66,14 +36,21 @@ class Parser:
         text = self._get_text()
         stemmed_text = self._stem_string(text, p)
         self._get_base_text_dict(stemmed_text)
-        word_pos_dict = self._get_word_pos_dict(stemmed_text)
-        self._update_format_code(stemmed_text, word_pos_dict, s_title, s_heading, s_bold, s_italic)
+        # word_pos_dict = self._get_word_pos_dict(stemmed_text)
+        self._update_format_code(stemmed_text, s_title, s_heading, s_bold, s_italic)
 
         aTags, aUrl = self._get_anchor()
 
         self._make_anchor_dict(aTags, aUrl)
 
-        return self.base_text_dict, self.anchor_dict
+        # calculate weighted tf considering font
+        weight_sum = self.numWords
+        for k, v in self.font_counter.items():
+            weight_sum += k * v
+        for k, v in self.base_text_dict.values():
+            v.tf /= weight_sum
+
+        return self.base_text_dict, self.anchor_dict, self.numWords
 
     def _make_anchor_dict(self, aTags, aUrl):
         for i in range(len(aTags)):
@@ -140,30 +117,24 @@ class Parser:
 
     def _stem_string(self, text, p):
         delim = re.compile(r'[\W_]+', re.ASCII)
-
-        # punctuation = re.compile('[{}]+'.format(re.escape(p)))
         clean_string = delim.sub(' ', text.strip().lower())
-        # for line in text.splitlines():
-        #     for word in line.strip().lower().split(" "):
-        #         word = word.strip(string.punctuation)
-        #         new_word = ''
-        #         for c in word:
-        #             if self._isEnglish(c):
-        #                 new_word = new_word + c
-        #         new_word = punctuation.sub('', new_word)  # added
-        #         if new_word != "":
-        #             clean_string = clean_string + " " + new_word
         p = PorterStemmer()
 
         return p.stem_sentence(clean_string)
 
     # input: cleaned stemed text as one string
-    # output: base text dict {"word":[[pos1, 0], [pos2, 0],...]}
+    # output: base text dict {"word":PLNode}
 
     def _get_base_text_dict(self, stem_text):
-        for i in range(len(stem_text.split(" "))):
-            word = stem_text.split(" ")[i]
-            self.base_text_dict[word].append([i, 0])
+        words = stem_text.split(" ")
+        self.numWords = len(words)
+        for i in range(self.numWords):
+            word = words[i]
+            if word in self.base_text_dict:
+                self.base_text_dict[word].occurrences.append(i)
+                self.base_text_dict[word].tf += 1
+            else:
+                self.base_text_dict[word] = PLNode(-1, 1, [i])
 
     # input: cleaned stemed text as one string
     # output: pos dict {char_pos_index: word_pos_index}
@@ -185,23 +156,28 @@ class Parser:
         # print(s)
         for t in s:
             if t != "":
-                i = clean_string.find(t)
-                try:
-                    start = word_pos_dict[i]
-                except(KeyError):
-                    continue
-                end = start + len(t.split(" "))
-                for w in t.strip().split(" "):
-                    pos_list = self.base_text_dict[w]
-                    # print(pos_list)
-                    for i in range(len(pos_list)):
-                        if start <= pos_list[i][0] < end:
-                            self.base_text_dict[w][i][1] = code
+                words = t.strip().split()
+                self.font_counter[code] += len()
+                for w in words:
+                    self.base_text_dict[w].tf += code # accumulate term weight
+                # i = clean_string.find(t)
+                # try:
+                #     start = word_pos_dict[i]
+                # except(KeyError):
+                #     continue
+                # end = start + len(t.split(" "))
+                # for w in t.strip().split(" "):
+                #     pos_list = self.base_text_dict[w]
+                #     # print(pos_list)
+                #     for i in range(len(pos_list)):
+                #         if start <= pos_list[i][0] < end:
+                #             self.base_text_dict[w][i][1] = code
 
     # code priority
     # title: 4 > headings: 3 > bold: 2 > italic: 1 > plain: 0
     def _update_format_code(self, clean_string, word_pos_dict,
                             s_title, s_head, s_bold, s_italic):
+        self.font_counter = {4: 0, 3: 0, 2: 0, 1: 0}
         self._format_code_helper(clean_string, word_pos_dict, s_italic, 1)
         self._format_code_helper(clean_string, word_pos_dict, s_bold, 2)
         self._format_code_helper(clean_string, word_pos_dict, s_head, 3)

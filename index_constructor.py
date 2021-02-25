@@ -7,7 +7,7 @@ import heapq
 import glob
 from collections import Counter
 from parse_html import Parser, is_valid
-from serialize import IndexSerializer, PLNode
+from serialize import IndexSerializer
 from utils import get_logger
 
 def load_file(filename):
@@ -18,18 +18,18 @@ def load_file(filename):
 
 def load_doc_records(file_prefix):
     # docid, num_words, len(url), url
-    record_struct = struct.Struct('>III')
+    record_struct = struct.Struct('>IIdI')
     with open(f'{file_prefix}.doc2url.idx', 'rb') as f:
         while True:
             chk = f.read(record_struct.size)
             if chk == b'':
                 break
-            docid, num_words, urllen = record_struct.unpack(chk)
+            docid, num_words, pagerank, urllen = record_struct.unpack(chk)
             chk = f.read(urllen)
             if chk == b'':
                 break
             url = struct.unpack(f'>{urllen}s', chk)[0]
-            yield docid, num_words, url.decode()
+            yield docid, num_words, pagerank, url.decode()
 
 
 class IndexConstructor(object):
@@ -67,15 +67,16 @@ class IndexConstructor(object):
         
         print(filename)
         self.curr_size += len(content)
-        word_index, anchor_index = self.parser.parse(content)
+        word_index, anchor_index, num_words = self.parser.parse(content)
         # update invert index
         for k, v in word_index.items():
             if len(k) == 0:
                 continue
+            v.docId = self.doc_counter
             if k in self.word_index:
-                self.word_index[k].append(PLNode(self.doc_counter, v))
+                self.word_index[k].append(v)
             else:
-                self.word_index[k] = [PLNode(self.doc_counter, v)]
+                self.word_index[k] = [v]
         
         for k, v in anchor_index.items():
             if len(k) == 0:
@@ -85,7 +86,7 @@ class IndexConstructor(object):
             else:
                 self.anchor_index[k] = v
         # update doc index
-        self._append_doc_record(self.doc_counter, len(word_index), url)
+        self._append_doc_record(self.doc_counter, num_words, url)
         self.doc_counter += 1
     
     def _reset_temps(self):
@@ -132,10 +133,10 @@ class IndexConstructor(object):
         f.write(IndexSerializer.simple_serialize(docIds))
 
     def _append_doc_record(self, docid, num_words, url):
-        doc_record_template = '>III{}s' # docid, num_words, len(url), url
+        doc_record_template = '>IIdI{}s' # docid, num_words, pagerank, len(url), url
         bin_format = doc_record_template.format(len(url))
         record_struct = struct.Struct(bin_format)
-        self.doc_table_file.write(record_struct.pack(docid, num_words, len(url),url.encode()))
+        self.doc_table_file.write(record_struct.pack(docid, num_words, 0, len(url),url.encode()))
 
     def _append_dict_record(self, df, word):
         df.write(word+'\n')
@@ -277,7 +278,7 @@ class IndexConstructor(object):
         print('----- merge invert index -----')
         self._merge_invert_index()
 
-        self.url2docid = {a[2]: a[0] for a in load_doc_records(self.file_prefix)}
+        self.url2docid = {a[-1]: a[0] for a in load_doc_records(self.file_prefix)}
         print('----- merge anchor index -----')
         self._merge_anchor_index()
 
@@ -293,7 +294,6 @@ class IndexConstructor(object):
     #   compress postinglist, write to full index file
     # after handling all words, write out offset file and dictionary
 
-# Submit a report (pdf) with the following content: a table with the following numbers pertaining to your index. It should have, at least the number of documents, the number of [unique] words, and the total size (in KB) of your index on disk.
 if __name__ == '__main__':
     dir = sys.argv[1]
     constructor = IndexConstructor('test')
