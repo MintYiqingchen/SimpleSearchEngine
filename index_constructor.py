@@ -50,8 +50,17 @@ class IndexConstructor(object):
         self.file_prefix = file_prefix
 
         self.logger = get_logger('INDEX_CONSTRUCTOR')
+
     def open_doc2url(self, mode):
         self.doc_table_file = open(f'{self.file_prefix}.doc2url.idx', mode)
+
+    def update_page_rank(self, rank_dict):
+        new_name = f'.tmp.{self.file_prefix}.doc2url.idx'
+        with open(new_name, 'wb') as f:
+            for docid, num_words, _, url in load_doc_records(f'{self.file_prefix}'):
+                self._append_doc_record(f, docid, num_words, rank_dict[docid], url)
+        
+        os.rename(new_name, f'{self.file_prefix}.doc2url.idx')
 
     def add_file(self, filename):
         url, content = load_file(filename)
@@ -86,7 +95,7 @@ class IndexConstructor(object):
             else:
                 self.anchor_index[k] = v
         # update doc index
-        self._append_doc_record(self.doc_counter, num_words, 0, url)
+        self._append_doc_record(self.doc_table_file, self.doc_counter, num_words, 0, url)
         self.doc_counter += 1
     
     def _reset_temps(self):
@@ -132,11 +141,11 @@ class IndexConstructor(object):
         f.write(IndexSerializer.simple_serialize(wid))
         f.write(IndexSerializer.simple_serialize(docIds))
 
-    def _append_doc_record(self, docid, num_words, pagerank, url):
+    def _append_doc_record(self, f, docid, num_words, pagerank, url):
         doc_record_template = '>IIdI{}s' # docid, num_words, pagerank, len(url), url
         bin_format = doc_record_template.format(len(url))
         record_struct = struct.Struct(bin_format)
-        self.doc_table_file.write(record_struct.pack(docid, num_words, pagerank, len(url),url.encode()))
+        f.write(record_struct.pack(docid, num_words, pagerank, len(url),url.encode()))
 
     def _append_dict_record(self, df, word):
         df.write(word+'\n')

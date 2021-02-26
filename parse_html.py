@@ -39,7 +39,7 @@ class Parser:
         # word_pos_dict = self._get_word_pos_dict(stemmed_text)
         self._update_format_code(stemmed_text, s_title, s_heading, s_bold, s_italic)
 
-        aTags, aUrl = self._get_anchor()
+        aTags, aUrl = self.get_anchor()
 
         self._make_anchor_dict(aTags, aUrl)
 
@@ -92,7 +92,7 @@ class Parser:
         return iTags
 
     # anchor word
-    def _get_anchor(self):
+    def get_anchor(self):
         aTags = []
         aUrl = []
         for i in self.soup.find_all(href=is_valid, rel=lambda x: (x is None or x != 'nofollow')):
