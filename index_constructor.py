@@ -82,11 +82,11 @@ class IndexConstructor(object):
             if len(k) == 0:
                 continue
             if k in self.anchor_index:
-                self.anchor_index[k].extend(v)
+                self.anchor_index[k].update(v)
             else:
                 self.anchor_index[k] = v
         # update doc index
-        self._append_doc_record(self.doc_counter, num_words, url)
+        self._append_doc_record(self.doc_counter, num_words, 0, url)
         self.doc_counter += 1
     
     def _reset_temps(self):
@@ -132,11 +132,11 @@ class IndexConstructor(object):
         f.write(IndexSerializer.simple_serialize(wid))
         f.write(IndexSerializer.simple_serialize(docIds))
 
-    def _append_doc_record(self, docid, num_words, url):
+    def _append_doc_record(self, docid, num_words, pagerank, url):
         doc_record_template = '>IIdI{}s' # docid, num_words, pagerank, len(url), url
         bin_format = doc_record_template.format(len(url))
         record_struct = struct.Struct(bin_format)
-        self.doc_table_file.write(record_struct.pack(docid, num_words, 0, len(url),url.encode()))
+        self.doc_table_file.write(record_struct.pack(docid, num_words, pagerank, len(url),url.encode()))
 
     def _append_dict_record(self, df, word):
         df.write(word+'\n')

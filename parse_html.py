@@ -17,7 +17,7 @@ class Parser:
         self.content = content
         self.soup = BeautifulSoup(self.content, 'html.parser')
         self.base_text_dict = {}  # {k:word, v:PLNode}
-        self.anchor_dict = defaultdict(list)  # {k: word, v:urllist}
+        self.anchor_dict = defaultdict(set)  # {k: word, v:urlset}
 
     def parse(self, content):
         self.reset(content)
@@ -27,13 +27,13 @@ class Parser:
 
         # filter low info pages or pure data page
         if not self.soup.html:
-            return {}, {}
+            return {}, {}, 0
 
         s_title = self._get_title()
         s_heading = self._get_heading()
         s_bold = self._get_bold()
         s_italic = self._get_italic()
-        text = self._get_text()
+        text = self._get_text(self.soup)
         stemmed_text = self._stem_string(text, p)
         self._get_base_text_dict(stemmed_text)
         # word_pos_dict = self._get_word_pos_dict(stemmed_text)
@@ -47,7 +47,7 @@ class Parser:
         weight_sum = self.numWords
         for k, v in self.font_counter.items():
             weight_sum += k * v
-        for k, v in self.base_text_dict.values():
+        for k, v in self.base_text_dict.items():
             v.tf /= weight_sum
 
         return self.base_text_dict, self.anchor_dict, self.numWords
@@ -55,7 +55,7 @@ class Parser:
     def _make_anchor_dict(self, aTags, aUrl):
         for i in range(len(aTags)):
             for w in aTags[i].strip().split(" "):
-                self.anchor_dict[w].append(aUrl[i])
+                self.anchor_dict[w].add(aUrl[i])
 
 
     # title
@@ -64,14 +64,14 @@ class Parser:
         titles = self.soup.find_all('title')
         
         for t in titles:
-            title = t.text
+            title = self._get_text(t)
             tTags.append(self._stem_string(title, p))
         return tTags
 
     def _get_heading(self):
         hTags = []
         for headlings in self.soup.find_all(re.compile('^h[1-6]$')):
-            heading = headlings.text.strip()
+            heading = self._get_text(headlings)
             hTags.append(self._stem_string(heading, p))
         return hTags
 
@@ -79,7 +79,7 @@ class Parser:
     def _get_bold(self):
         bTags = []
         for i in self.soup.findAll('b'):
-            bold = i.text.strip()
+            bold = self._get_text(i)
             bTags.append(self._stem_string(bold, p))
         return bTags
 
@@ -87,7 +87,7 @@ class Parser:
     def _get_italic(self):
         iTags = []
         for i in self.soup.findAll('i'):
-            italic = i.text.strip()
+            italic = self._get_text(i)
             iTags.append(self._stem_string(italic, p))
         return iTags
 
@@ -96,13 +96,13 @@ class Parser:
         aTags = []
         aUrl = []
         for i in self.soup.find_all(href=is_valid, rel=lambda x: (x is None or x != 'nofollow')):
-            aTags.append(self._stem_string(i.text.strip(), p))
+            aTags.append(self._stem_string(self._get_text(i), p))
             aUrl.append(i['href'])  # there are non-html content, like email address
         return aTags, aUrl
 
     # all text
-    def _get_text(self):
-        return self.soup.text
+    def _get_text(self, elem):
+        return ' '.join(elem.stripped_strings)
 
     def _isEnglish(self, s):
         try:
@@ -126,7 +126,7 @@ class Parser:
     # output: base text dict {"word":PLNode}
 
     def _get_base_text_dict(self, stem_text):
-        words = stem_text.split(" ")
+        words = stem_text.split()
         self.numWords = len(words)
         for i in range(self.numWords):
             word = words[i]
@@ -151,13 +151,13 @@ class Parser:
 
         return word_pos_dict
 
-    def _format_code_helper(self, clean_string, word_pos_dict, s, code):
+    def _format_code_helper(self, clean_string, s, code):
         # print(word_pos_dict)
         # print(s)
         for t in s:
             if t != "":
                 words = t.strip().split()
-                self.font_counter[code] += len()
+                self.font_counter[code] += len(words)
                 for w in words:
                     self.base_text_dict[w].tf += code # accumulate term weight
                 # i = clean_string.find(t)
@@ -175,13 +175,14 @@ class Parser:
 
     # code priority
     # title: 4 > headings: 3 > bold: 2 > italic: 1 > plain: 0
-    def _update_format_code(self, clean_string, word_pos_dict,
+    def _update_format_code(self, clean_string, 
                             s_title, s_head, s_bold, s_italic):
+        # print(clean_string)
         self.font_counter = {4: 0, 3: 0, 2: 0, 1: 0}
-        self._format_code_helper(clean_string, word_pos_dict, s_italic, 1)
-        self._format_code_helper(clean_string, word_pos_dict, s_bold, 2)
-        self._format_code_helper(clean_string, word_pos_dict, s_head, 3)
-        self._format_code_helper(clean_string, word_pos_dict, s_title, 4)
+        self._format_code_helper(clean_string, s_italic, 1)
+        self._format_code_helper(clean_string, s_bold, 2)
+        self._format_code_helper(clean_string, s_head, 3)
+        self._format_code_helper(clean_string, s_title, 4)
 
 
 

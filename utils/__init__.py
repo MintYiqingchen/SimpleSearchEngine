@@ -1,6 +1,7 @@
 import logging
 import os
 from urllib.parse import urlparse
+import re
 
 def is_valid(url):
     if url is None:
