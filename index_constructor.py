@@ -60,7 +60,7 @@ class IndexConstructor(object):
             for docid, num_words, _, url in load_doc_records(f'{self.file_prefix}'):
                 self._append_doc_record(f, docid, num_words, rank_dict[docid], url)
         
-        os.rename(new_name, f'{self.file_prefix}.doc2url.idx')
+        os.rename(new_name, f'rank_{self.file_prefix}.doc2url.idx')
 
     def add_file(self, filename):
         url, content = load_file(filename)
