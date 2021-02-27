@@ -21,8 +21,9 @@ $(document).ready(function () {
 
     $("#search").click(function () {
         $("#search").prop("disabled", true);
-        let word = $("#input").val();
-        console.log(word);
+        $("#result").empty();
+        // let word = $("#input").val();
+        // console.log(word);
         $.ajax({
             type: "POST",
             url: "/api/search",
@@ -41,7 +42,10 @@ $(document).ready(function () {
                 let line = $(document.createElement("tr"));
                 line.append($(document.createElement("td")).text(item.docid));
                 line.append($(document.createElement("td")).text(item.score));
-                line.append($(document.createElement("td")).text(item.url));
+
+                let a = $(document.createElement("a"));
+                a.attr("href", item.url).text(item.url);
+                line.append($(document.createElement("td")).append(a));
                 newTable.append(line);
             });
             formDiv.append(newTable);
