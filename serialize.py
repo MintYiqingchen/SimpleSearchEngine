@@ -1,6 +1,8 @@
 import os
 import json
 import struct
+# from indexer import Indexer
+
 SKIPSIZE = 512
 class PLNode:
     def __init__(self, docId, tf, occurrences):
@@ -104,6 +106,31 @@ class IndexSerializer(object):
         
         return postingList
 
+    @staticmethod
+    def findIndexItem(word):
+        # wordid = Indexer('test').word2id[word];
+        # print(wordid)
+        wordid = 19
+        f = open('test.offset.meta', 'rb')
+        f.seek(wordid * 16);
+        buffer = f.read(16)
+        invertoffset, anchoroffset = struct.unpack('>qq', buffer)
+        print(invertoffset)
+        print(anchoroffset)
+        invertFile = open('test.invert.idx', 'rb')
+        invertFile.seek(invertoffset)
+        buffer = f.read(8)
+        wordid, postlen = struct.unpack('>II', buffer)
+        print(wordid)
+        print(postlen)
+        postlistBuffer = f.read(postlen)
+        # return IndexSerializer.deserialize(postlistBuffer);
+
+
+        # word -> wordid -> offset -> postingList
+
+
+
 
 if __name__ == "__main__":
     pln1 = PLNode(1, 0.5, [0, 9, 30, 35])
@@ -127,6 +154,8 @@ if __name__ == "__main__":
     # print(byte)
     _, a = IndexSerializer.deserialize(byte, True)
     print(a == pl)
+
+    postingList = IndexSerializer.findIndexItem("and");
 
 # b = pln1.docId.to_bytes(4, "big")
 # # b += bytes(pln1.occurrences)
