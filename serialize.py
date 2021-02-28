@@ -104,32 +104,7 @@ class IndexSerializer(object):
         if with_skip:
             return skipDictionary, postingList
         
-        return postingList
-
-    @staticmethod
-    def findIndexItem(word):
-        # wordid = Indexer('test').word2id[word];
-        # print(wordid)
-        wordid = 19
-        f = open('test.offset.meta', 'rb')
-        f.seek(wordid * 16);
-        buffer = f.read(16)
-        invertoffset, anchoroffset = struct.unpack('>qq', buffer)
-        print(invertoffset)
-        print(anchoroffset)
-        invertFile = open('test.invert.idx', 'rb')
-        invertFile.seek(invertoffset)
-        buffer = f.read(8)
-        wordid, postlen = struct.unpack('>II', buffer)
-        print(wordid)
-        print(postlen)
-        postlistBuffer = f.read(postlen)
-        # return IndexSerializer.deserialize(postlistBuffer);
-
-
-        # word -> wordid -> offset -> postingList
-
-
+        return postingList  
 
 
 if __name__ == "__main__":
