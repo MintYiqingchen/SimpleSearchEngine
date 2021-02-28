@@ -34,7 +34,7 @@ class Parser:
         s_bold = self._get_bold()
         s_italic = self._get_italic()
         text = self._get_text(self.soup)
-        stemmed_text = self._stem_string(text, p)
+        stemmed_text = self.stem_string(text, p)
         self._get_base_text_dict(stemmed_text)
         # word_pos_dict = self._get_word_pos_dict(stemmed_text)
         self._update_format_code(stemmed_text, s_title, s_heading, s_bold, s_italic)
@@ -65,14 +65,14 @@ class Parser:
         
         for t in titles:
             title = self._get_text(t)
-            tTags.append(self._stem_string(title, p))
+            tTags.append(self.stem_string(title, p))
         return tTags
 
     def _get_heading(self):
         hTags = []
         for headlings in self.soup.find_all(re.compile('^h[1-6]$')):
             heading = self._get_text(headlings)
-            hTags.append(self._stem_string(heading, p))
+            hTags.append(self.stem_string(heading, p))
         return hTags
 
     # bold word
@@ -80,7 +80,7 @@ class Parser:
         bTags = []
         for i in self.soup.findAll('b'):
             bold = self._get_text(i)
-            bTags.append(self._stem_string(bold, p))
+            bTags.append(self.stem_string(bold, p))
         return bTags
 
     # italic word
@@ -88,7 +88,7 @@ class Parser:
         iTags = []
         for i in self.soup.findAll('i'):
             italic = self._get_text(i)
-            iTags.append(self._stem_string(italic, p))
+            iTags.append(self.stem_string(italic, p))
         return iTags
 
     # anchor word
@@ -96,7 +96,7 @@ class Parser:
         aTags = []
         aUrl = []
         for i in self.soup.find_all(href=is_valid, rel=lambda x: (x is None or x != 'nofollow')):
-            aTags.append(self._stem_string(self._get_text(i), p))
+            aTags.append(self.stem_string(self._get_text(i), p))
             aUrl.append(i['href'])  # there are non-html content, like email address
         return aTags, aUrl
 
@@ -115,7 +115,7 @@ class Parser:
     # input: text
     # return: cleaned base string "all word context" (NOTE: '\n'etc should be removed)
 
-    def _stem_string(self, text, p):
+    def stem_string(self, text, p = None):
         delim = re.compile(r'[\W_]+', re.ASCII)
         clean_string = delim.sub(' ', text.strip().lower())
         p = PorterStemmer()
