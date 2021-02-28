@@ -1,10 +1,14 @@
 from flask import Flask, redirect, url_for
 import flask
 import json
+from indexer import Indexer
 
 app = Flask(__name__, static_url_path='', 
             static_folder='web/static',
             template_folder='web/templates')
+
+
+myIndexer = Indexer('test')
 
 @app.route('/')
 def index():

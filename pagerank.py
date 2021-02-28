@@ -69,3 +69,5 @@ if __name__ == '__main__':
     rank = pagerank(G)
     constructor = IndexConstructor('test')
     constructor.update_page_rank(rank)
+    # ranks = {a[0]: a[2] for a in load_doc_records('rank_test')}
+    # print(sum(ranks.values()))
