@@ -2,6 +2,8 @@ from flask import Flask, redirect, url_for
 import flask
 import json
 from indexer import Indexer
+from parse_html import Parser
+from utils import get_logger
 
 app = Flask(__name__, static_url_path='', 
             static_folder='web/static',
@@ -9,6 +11,8 @@ app = Flask(__name__, static_url_path='',
 
 
 myIndexer = Indexer('test')
+parser = Parser()
+
 
 @app.route('/')
 def index():
@@ -20,7 +24,14 @@ def search():
 
 @app.route('/api/search', methods=['POST'])
 def query_api():
-    print(flask.request.get_json())
+    data = flask.request.get_json()
+    query = data['query']
+    query = parser.stem_string(query)
+    words = query.split()
+    get_logger('APP').info(query)
+
+    res = myIndexer.get_result(words)
+    
     return json.dumps([{"docid":0, "score":1, "url":"a"},
     {"docid":1, "score":2, "url":"c"},
     {"docid":3, "score":2, "url":"d"},
