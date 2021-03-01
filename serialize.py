@@ -130,8 +130,6 @@ if __name__ == "__main__":
     _, a = IndexSerializer.deserialize(byte, True)
     print(a == pl)
 
-    postingList = IndexSerializer.findIndexItem("and");
-
 # b = pln1.docId.to_bytes(4, "big")
 # # b += bytes(pln1.occurrences)
 # b2 = bytes()

@@ -3,6 +3,7 @@ from index_constructor import load_doc_records
 from utils import get_logger
 import struct
 from serialize import IndexSerializer
+from collections import Counter, defaultdict
 
 class DocInfo(object):
     def __init__(self, docid, num_words, rankscore, url):
@@ -51,7 +52,7 @@ class Indexer(object):
             buffer = f.read(8)
             wordid, postlen = struct.unpack('>II', buffer)
             postlistBuffer = f.read(postlen)
-            return IndexSerializer.deserialize(postlistBuffer);
+            return IndexSerializer.deserialize(postlistBuffer)
 
     def find_anchor_item(self, word):
         wordid = self.word2id[word]
@@ -69,9 +70,9 @@ class Indexer(object):
                 buffer = f.read(4)
                 v = struct.unpack('>I', buffer)[0]
                 docIds[k] = v
-            return docIds;
+            return docIds
     
-    def within_window(self, plists):
+    def within_window(self, plists, common_map):
         pass
 
     def get_tfidf_scores(self, plists):
@@ -80,10 +81,48 @@ class Indexer(object):
     def get_anchor_scores(self, plists):
         pass
 
-    def and_posting_lists(self, plists):
-        pass
+    def and_posting_lists(self, plists): # return [plist]
+        if len(plists) <= 1:
+            return plists
+        counter = Counter()
+        indexdict = defaultdict(list)
+        for i, d in enumerate(plists[0]):
+            counter[d.docId] = 1
+            indexdict[d.docId].append(i)
+
+        for pi in range(1, len(plists)):
+            # print(skipdict)
+            for i, d in enumerate(plists[pi]):
+                if d.docId not in counter:
+                    continue
+                elif counter[d.docId] != pi: # exists in previous words' posting list
+                    del counter[d.docId]
+                    del indexdict[d.docId]
+                else:
+                    counter[d.docId] += 1
+                    indexdict[d.docId].append(i)
+
+        common_id = []
+        while len(counter):
+            docId, count = counter.most_common(1)[0]
+            # print(docId)
+            # print(count)
+            if count < len(plists):
+                break
+            common_id.append(docId)
+            del counter[docId]
+        
+        if not common_id: # and result is empty
+            return None
+
+        return {k: indexdict[k] for k in common_id}
 
     def get_result(self, words): # called by app
+        plists = [self.find_index_item(w)[1] for w in words] # [(skipdict, plist)]
+        common_map = self.and_posting_lists(plists) # dict(docid->[idx])
+        if common_map:
+            window_scores = self.within_window(plists, common_map)
+
         return []
 
 if __name__ == '__main__':

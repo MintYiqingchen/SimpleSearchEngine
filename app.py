@@ -22,6 +22,10 @@ def index():
 def search():
     return flask.render_template("index.html")
 
+# Iftekhar ahmed
+# machine learning
+# ACM
+# master of software engineering
 @app.route('/api/search', methods=['POST'])
 def query_api():
     data = flask.request.get_json()
