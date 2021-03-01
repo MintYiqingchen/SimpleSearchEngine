@@ -5,6 +5,7 @@ import struct
 from serialize import IndexSerializer
 from collections import Counter, defaultdict
 import heapq
+import math
 
 class DocInfo(object):
     def __init__(self, docid, num_words, rankscore, url):
@@ -111,11 +112,81 @@ class Indexer(object):
                 wsize_map[docid] = window_size
         return wsize_map
 
+    '''
+        calculate tf-idf given list of posting lists for each term
+
+        @:param plists: [pl1, pl2, ...]
+        @:return sum_list: [(docid, tfidf_sum)]
+        '''
+
     def get_tfidf_scores(self, plists):
-        pass
+        tfidf_dict = {}
+        for i in plists:
+            tfidf_dict = self._term_tfidf(i, tfidf_dict)
+
+        return self._transform_score_format(tfidf_dict)
+
+    '''
+    calculate tf-idf term-at-a-time
+
+    @:param pl: posting list of one term
+    @:param dict: tfidf_dict(k: docid, v: tfidf_sum)
+    @:return: tfidf_dict
+    '''
+
+    def _term_tfidf(self, pl, dict):
+        n = len(self.docid2url)
+        for i in pl:
+            docid = i.docId
+            tf = i.tf
+            doc_num = len(pl)
+            tfidf = tf / math.log10(n / doc_num)
+            if docid not in dict:
+                dict[docid] = tfidf
+            else:
+                dict[docid] += tfidf
+        return dict
+
+    '''
+    calculate the sum of tf-idf for each doc
+
+    @:param dict: summed tf-idf dict(k: docid, v: tfidf sum)
+    @:return sum_list: [(docid, tfidf_sum)]
+    '''
+
+    def _transform_score_format(self, dict):
+        score_list = []
+        for docid in dict:
+            tfidf_sum = dict[docid]
+            score_list.append((docid, tfidf_sum))
+        return score_list
+
+    '''
+    calculate the anchor score
+
+    @:param plits: list of dict: docIds[docid] = count of word in this docid
+    @:return: list[(int,double)] docid and score
+、
+    '''
 
     def get_anchor_scores(self, plists):
-        pass
+        total = 0
+        docid_count = {}  # k: doc id, v: count
+        for dict in plists:
+            for docid in dict:  # each doc id
+                count = dict[docid]  # count for each doc id of each word
+                total += count
+                if docid not in docid_count:
+                    docid_count[docid] = count
+                else:
+                    docid_count[docid] += count
+
+        anchor_score_list = []
+        for docid in docid_count:
+            anchor_score_list.append(
+                (docid, docid_count[docid] / total))  # note: if plist contain lots of word, the total is large
+
+        return anchor_score_list
 
     def and_posting_lists(self, plists): # return [plist]
         if len(plists) <= 1:
@@ -175,3 +246,19 @@ if __name__ == '__main__':
     print(apl)
     for i in apl:
         print(i)
+
+    # # test get_tfidf_scores
+    # from serialize import PLNode
+    # indexer = Indexer('test')
+    # pln1 = PLNode(1, 0.5, [0, 9, 30, 35])
+    # pln2 = PLNode(2, 0.88, [5, 13, 38, 49, 67, 90, 107, 2])
+    # pln3 = PLNode(3, 0.23, [7, 29, 38, 57, 60])
+    # pl1 = [pln1, pln2]
+    # pl2 = [pln2, pln3]
+    # indexer.get_tfidf_scores([pl1, pl2])
+    #
+    # # get_anchor_scores
+    # dict1={1:2, 2:1}
+    # dict2 = {2: 2, 3: 4}
+    # anchor_ls = [dict1, dict2]
+    # indexer.get_anchor_scores(anchor_ls)
