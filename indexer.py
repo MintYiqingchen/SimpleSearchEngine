@@ -4,6 +4,7 @@ from utils import get_logger
 import struct
 from serialize import IndexSerializer
 from collections import Counter, defaultdict
+import heapq
 
 class DocInfo(object):
     def __init__(self, docid, num_words, rankscore, url):
@@ -73,7 +74,42 @@ class Indexer(object):
             return docIds
     
     def within_window(self, plists, common_map):
-        pass
+        def read_next_heapitem(iters, i):
+            try:
+                return next(iters[i]), i
+            except StopIteration:
+                return None
+        wsize_map = {}
+        for docid, idxs in common_map.items():
+            left = -1
+            right = -1
+            # initialize window
+            iters = [iter(plists[pi][idx].occurrences) for pi, idx in enumerate(idxs)]
+            hp = []
+            for pi in range(len(iters)):
+                a = read_next_heapitem(iters, pi)
+                hp.append(a)
+                if a[0] < left or left < 0:
+                    left = a[0]
+                if a[0] > right or right < 0:
+                    right = a[0]
+            heapq.heapify(hp)
+            window_size = right - left + 1
+            # sliding window
+            while len(hp) == len(idxs):
+                position, pi = heapq.heappop(hp)
+                # if position < 0:
+                #     self.logger.error(f'{position} {pi}')
+                a = read_next_heapitem(iters, pi)
+                if a:
+                    heapq.heappush(hp, a)
+                    left = hp[0][0]
+                    right = max(right, a[0])
+                    window_size = min(window_size, right - left + 1)
+
+            if right >= 0 and left >= 0:
+                wsize_map[docid] = window_size
+        return wsize_map
 
     def get_tfidf_scores(self, plists):
         pass
@@ -119,10 +155,11 @@ class Indexer(object):
 
     def get_result(self, words): # called by app
         plists = [self.find_index_item(w)[1] for w in words] # [(skipdict, plist)]
-        common_map = self.and_posting_lists(plists) # dict(docid->[idx])
-        if common_map:
-            window_scores = self.within_window(plists, common_map)
-
+        
+        common_map = self.and_posting_lists(plists) # dict(docid->list[idx])
+        if common_map and len(words) > 1:
+            window_sizes = self.within_window(plists, common_map) # dict(docid->list[window_size])
+            # print(window_sizes)
         return []
 
 if __name__ == '__main__':
