@@ -13,11 +13,14 @@ class DocInfo(object):
         self.num_words = num_words
         self.rankscore = rankscore
         self.url = url
-
+    
 class Indexer(object):
     def __init__(self, file_prefix):
         self.logger = get_logger('INDEXER')
-
+        self.anchor_weight = 2
+        self.window_weight = 2
+        self.pagerank_weight = 400
+        self.topk = 200
         self.file_prefix = file_prefix
         self._load_index()
 
@@ -113,18 +116,17 @@ class Indexer(object):
         return wsize_map
 
     '''
-        calculate tf-idf given list of posting lists for each term
+    calculate tf-idf given list of posting lists for each term
 
-        @:param plists: [pl1, pl2, ...]
-        @:return sum_list: [(docid, tfidf_sum)]
-        '''
-
+    @:param plists: [pl1, pl2, ...]
+    @:return sum_list: [(docid, tfidf_sum)]
+    '''
     def get_tfidf_scores(self, plists):
         tfidf_dict = {}
         for i in plists:
             tfidf_dict = self._term_tfidf(i, tfidf_dict)
-
-        return self._transform_score_format(tfidf_dict)
+        return tfidf_dict
+        # return self._transform_score_format(tfidf_dict)
 
     '''
     calculate tf-idf term-at-a-time
@@ -140,7 +142,7 @@ class Indexer(object):
             docid = i.docId
             tf = i.tf
             doc_num = len(pl)
-            tfidf = tf / math.log10(n / doc_num)
+            tfidf = tf * math.log10(n / doc_num)
             if docid not in dict:
                 dict[docid] = tfidf
             else:
@@ -166,7 +168,7 @@ class Indexer(object):
 
     @:param plits: list of dict: docIds[docid] = count of word in this docid
     @:return: list[(int,double)] docid and score
-、
+
     '''
 
     def get_anchor_scores(self, plists):
@@ -226,12 +228,40 @@ class Indexer(object):
 
     def get_result(self, words): # called by app
         plists = [self.find_index_item(w)[1] for w in words] # [(skipdict, plist)]
+        score_dict = self.get_tfidf_scores(plists) # dict(docid->tfidf)
         
         common_map = self.and_posting_lists(plists) # dict(docid->list[idx])
         if common_map and len(words) > 1:
             window_sizes = self.within_window(plists, common_map) # dict(docid->list[window_size])
             # print(window_sizes)
-        return []
+            for docid, wsize in window_sizes.items():
+                score_dict[docid] += self.window_weight / max(1, wsize - len(words))
+        
+        # anchor score
+        plists = [self.find_anchor_item(w) for w in words]
+        anchor_score_list = self.get_anchor_scores(plists)
+        for docid, score in anchor_score_list:
+            if docid in score_dict:
+                score_dict[docid] += score * self.anchor_weight
+            else:
+                score_dict[docid] = score * self.anchor_weight
+        
+        # page rank score
+        for docid in score_dict:
+            score_dict[docid] += self.docid2url[docid].rankscore * self.pagerank_weight
+
+        # top-k
+        hp = []
+        for docid, score in score_dict.items():
+            heapq.heappush(hp, (score, docid))
+            if len(hp) > self.topk:
+                heapq.heappop(hp)
+        res = [None] * len(hp)
+        while hp:
+            score, docid = heapq.heappop(hp)
+            res[len(hp)] = {"docid": docid, "score": score, "url": self.docid2url[docid].url}
+        return res
+
 
 if __name__ == '__main__':
     indexer = Indexer('test')
@@ -248,17 +278,16 @@ if __name__ == '__main__':
         print(i)
 
     # # test get_tfidf_scores
-    # from serialize import PLNode
-    # indexer = Indexer('test')
-    # pln1 = PLNode(1, 0.5, [0, 9, 30, 35])
-    # pln2 = PLNode(2, 0.88, [5, 13, 38, 49, 67, 90, 107, 2])
-    # pln3 = PLNode(3, 0.23, [7, 29, 38, 57, 60])
-    # pl1 = [pln1, pln2]
-    # pl2 = [pln2, pln3]
-    # indexer.get_tfidf_scores([pl1, pl2])
-    #
-    # # get_anchor_scores
-    # dict1={1:2, 2:1}
-    # dict2 = {2: 2, 3: 4}
-    # anchor_ls = [dict1, dict2]
-    # indexer.get_anchor_scores(anchor_ls)
+    from serialize import PLNode
+    pln1 = PLNode(1, 0.5, [0, 9, 30, 35])
+    pln2 = PLNode(2, 0.88, [5, 13, 38, 49, 67, 90, 107, 2])
+    pln3 = PLNode(3, 0.23, [7, 29, 38, 57, 60])
+    pl1 = [pln1, pln2]
+    pl2 = [pln2, pln3]
+    indexer.get_tfidf_scores([pl1, pl2])
+    
+    # get_anchor_scores
+    dict1={1:2, 2:1}
+    dict2 = {2: 2, 3: 4}
+    anchor_ls = [dict1, dict2]
+    indexer.get_anchor_scores(anchor_ls)

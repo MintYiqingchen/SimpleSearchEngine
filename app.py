@@ -35,10 +35,10 @@ def query_api():
     get_logger('APP').info(query)
 
     res = myIndexer.get_result(words)
-    
-    return json.dumps([{"docid":0, "score":1, "url":"a"},
-    {"docid":1, "score":2, "url":"c"},
-    {"docid":3, "score":2, "url":"d"},
-    {"docid":4, "score":2, "url":"v"},
-    {"docid":5, "score":6, "url":"c"},
-    {"docid":6, "score":2, "url":"c"}])
+    return json.dumps(res)
+    # return json.dumps([{"docid":0, "score":1, "url":"a"},
+    # {"docid":1, "score":2, "url":"c"},
+    # {"docid":3, "score":2, "url":"d"},
+    # {"docid":4, "score":2, "url":"v"},
+    # {"docid":5, "score":6, "url":"c"},
+    # {"docid":6, "score":2, "url":"c"}])
