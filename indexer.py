@@ -17,9 +17,9 @@ class DocInfo(object):
 class Indexer(object):
     def __init__(self, file_prefix):
         self.logger = get_logger('INDEXER')
-        self.anchor_weight = 2
-        self.window_weight = 2
-        self.pagerank_weight = 400
+        self.anchor_weight = 9
+        self.window_weight = 5
+        self.pagerank_weight = 180
         self.topk = 200
         self.file_prefix = file_prefix
         self._load_index()
@@ -45,6 +45,10 @@ class Indexer(object):
         for docid, num_words, pagerank, url in load_doc_records(f'rank_{self.file_prefix}'):
             self.docid2url[docid] = DocInfo(docid, num_words, pagerank, url)
             self.avg_length += num_words
+        max_rank = max(self.docid2url.values(), key=lambda x: x.rankscore)
+        min_rank = min(self.docid2url.values(), key=lambda x: x.rankscore)
+        for v in self.docid2url.values():
+            v.rankscore = (v.rankscore - min_rank.rankscore) / (max_rank.rankscore - min_rank.rankscore + 1)
 
         self.avg_length /= len(self.docid2url)
         self.logger.info(f'num doc: {len(self.docid2url)}, doc avg len: {self.avg_length}, num words: {len(self.word2id)}, {len(self.wid2offsets)}')
@@ -174,6 +178,7 @@ class Indexer(object):
     def get_anchor_scores(self, plists):
         total = 0
         docid_count = {}  # k: doc id, v: count
+        print(plists)
         for dict in plists:
             for docid in dict:  # each doc id
                 count = dict[docid]  # count for each doc id of each word
@@ -183,12 +188,11 @@ class Indexer(object):
                 else:
                     docid_count[docid] += count
 
-        anchor_score_list = []
         for docid in docid_count:
-            anchor_score_list.append(
-                (docid, docid_count[docid] / total))  # note: if plist contain lots of word, the total is large
+            docid_count[docid] /= total
+            # note: if plist contain lots of word, the total is large
 
-        return anchor_score_list
+        return docid_count
 
     def and_posting_lists(self, plists): # return [plist]
         if len(plists) <= 1:
@@ -226,10 +230,18 @@ class Indexer(object):
 
         return {k: indexdict[k] for k in common_id}
 
+    def scale_score(self, score_dict):
+        max_score = max(score_dict.values())
+        min_score = min(score_dict.values())
+
+        for k in score_dict:
+            score_dict[k] = (score_dict[k] - min_score)/(max_score - min_score + 1)
+        return score_dict
+
     def get_result(self, words): # called by app
         plists = [self.find_index_item(w)[1] for w in words] # [(skipdict, plist)]
         score_dict = self.get_tfidf_scores(plists) # dict(docid->tfidf)
-        
+
         common_map = self.and_posting_lists(plists) # dict(docid->list[idx])
         if common_map and len(words) > 1:
             window_sizes = self.within_window(plists, common_map) # dict(docid->list[window_size])
@@ -238,9 +250,9 @@ class Indexer(object):
                 score_dict[docid] += self.window_weight / max(1, wsize - len(words))
         
         # anchor score
-        plists = [self.find_anchor_item(w) for w in words]
-        anchor_score_list = self.get_anchor_scores(plists)
-        for docid, score in anchor_score_list:
+        plists = list(filter(lambda x: x is not None, (self.find_anchor_item(w) for w in words)))
+        anchor_score = self.get_anchor_scores(plists)
+        for docid, score in anchor_score.items():
             if docid in score_dict:
                 score_dict[docid] += score * self.anchor_weight
             else:
