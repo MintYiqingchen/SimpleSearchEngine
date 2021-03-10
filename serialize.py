@@ -19,8 +19,15 @@ class PLNode:
         return True
 
     def __lt__(self, value):
+        if isinstance(value, int):
+            return self.docId < value
         return self.docId < value.docId
-            
+    
+    def __gt__(self, value):
+        if isinstance(value, int):
+            return self.docId > value
+        return self.docId > value.docId
+
 class IndexSerializer(object):
     @staticmethod
     def simple_serialize(obj):
@@ -71,12 +78,14 @@ class IndexSerializer(object):
     @staticmethod
     def deserialize(byte, with_skip = True, offset = 0):
         if with_skip:
-            dictLen = int.from_bytes(byte[offset: offset + 4], "big")
+            dictLen = struct.unpack_from(">I", byte, offset)[0]
+            # dictLen = int.from_bytes(byte[offset: offset + 4], "big")
             skipDictionary = {}
             idx = offset + 4
             for i in range(dictLen):
-                skipDictionary[int.from_bytes(
-                    byte[idx:idx+4], "big")] = int.from_bytes(byte[idx+4:idx+8], "big")
+                skipDictionary[struct.unpack_from(">I", byte, idx)[0]] = struct.unpack_from(">I", byte, idx+4)[0]
+                # skipDictionary[int.from_bytes(
+                #     byte[idx:idx+4], "big")] = int.from_bytes(byte[idx+4:idx+8], "big")
                 idx += 8
             # print(dictLen)
             # print(skipDictionary)
@@ -85,17 +94,19 @@ class IndexSerializer(object):
 
         postingList = []
         while(idx < len(byte)):
-            docId = int.from_bytes(byte[idx:idx+4], "big")
+            docId = struct.unpack_from(">I", byte, idx)[0]
+            # docId = int.from_bytes(byte[idx:idx+4], "big")
             idx += 4
             tf = struct.unpack_from('>d', byte, idx)[0]
             idx += 8
-            occLen = int.from_bytes(byte[idx:idx+4], "big")
+            occLen = struct.unpack_from(">I", byte, idx)[0] # int.from_bytes(byte[idx:idx+4], "big")
             idx += 4
             # print("{0} {1}".format(docId, occLen))
             occurrencelist = []
             for i in range(occLen):
-                occurrencelist.append(int.from_bytes(
-                    byte[idx:idx+4], "big"))
+                occurrencelist.append(struct.unpack_from(">I", byte, idx)[0])
+                # occurrencelist.append(int.from_bytes(
+                #     byte[idx:idx+4], "big"))
                 idx += 4
             postingList.append(PLNode(docId, tf, occurrencelist))
             # print(docId)
@@ -130,6 +141,9 @@ if __name__ == "__main__":
     _, a = IndexSerializer.deserialize(byte, True)
     print(a == pl)
 
+    import bisect
+    a = bisect.bisect(pl, 0)
+    print(a)
 # b = pln1.docId.to_bytes(4, "big")
 # # b += bytes(pln1.occurrences)
 # b2 = bytes()

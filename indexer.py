@@ -6,6 +6,7 @@ from serialize import IndexSerializer
 from collections import Counter, defaultdict
 import heapq
 import math
+import bisect
 
 class DocInfo(object):
     def __init__(self, docid, num_words, rankscore, url):
@@ -178,7 +179,7 @@ class Indexer(object):
     def get_anchor_scores(self, plists):
         total = 0
         docid_count = {}  # k: doc id, v: count
-        print(plists)
+        # print(plists)
         for dict in plists:
             for docid in dict:  # each doc id
                 count = dict[docid]  # count for each doc id of each word
@@ -194,7 +195,48 @@ class Indexer(object):
 
         return docid_count
 
-    def and_posting_lists(self, plists): # return [plist]
+    def and_posting_lists_fast(self, plists, skipdicts = None):
+
+        def next_position(plist, plnode, lo):
+            a = bisect.bisect(plist, plnode, lo)
+            if a > 0 and plist[a-1].docId == plnode:
+                return a - 1
+            return a
+
+        if len(plists) <= 1:
+            return plists
+
+        # initialize cand
+        maxId = -1
+        cand = [(plist[0], 0) for plist in plists]
+        common_map = {}
+        while len(cand) == len(plists):
+            count = 0
+            for i, tup in enumerate(cand):
+                if maxId < tup[0].docId:
+                    maxId = tup[0].docId
+                    count = 1
+                elif maxId == tup[0].docId:
+                    count += 1
+            
+            if count == len(cand): # find common
+                common_map[maxId] = [a[1] for a in cand]
+                cand = [(plists[i][j+1], j+1) for i, (_, j) in enumerate(cand) if j + 1 < len(plists[i])]
+            else:
+                new_cand = []
+                for i, tup in enumerate(cand):
+                    if tup[0].docId != maxId:
+                        p = next_position(plists[i], maxId, tup[1] + 1)
+                        if p < len(plists[i]):
+                            new_cand.append((plists[i][p], p))
+                    else:
+                        new_cand.append(tup)
+                cand = new_cand
+            # print(cand, count)
+
+        return common_map
+
+    def and_posting_lists(self, plists, skipdicts = None): # return docId->list(idx)
         if len(plists) <= 1:
             return plists
         counter = Counter()
@@ -239,10 +281,13 @@ class Indexer(object):
         return score_dict
 
     def get_result(self, words): # called by app
-        plists = [self.find_index_item(w)[1] for w in words] # [(skipdict, plist)]
+        plists = [self.find_index_item(w) for w in words] # [(skipdict, plist)]
+        skipdicts = [a[0] for a in plists]
+        plists = [a[1] for a in plists]
+
         score_dict = self.get_tfidf_scores(plists) # dict(docid->tfidf)
 
-        common_map = self.and_posting_lists(plists) # dict(docid->list[idx])
+        common_map = self.and_posting_lists_fast(plists) # dict(docid->list[idx])
         if common_map and len(words) > 1:
             window_sizes = self.within_window(plists, common_map) # dict(docid->list[window_size])
             # print(window_sizes)
