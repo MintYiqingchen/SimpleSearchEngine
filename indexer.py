@@ -7,7 +7,9 @@ from collections import Counter, defaultdict
 import heapq
 import math
 import bisect
-
+import time
+def time_to_ms(number):
+    return number * 1000
 class DocInfo(object):
     def __init__(self, docid, num_words, rankscore, url):
         self.docid = docid
@@ -62,7 +64,7 @@ class Indexer(object):
             buffer = f.read(8)
             wordid, postlen = struct.unpack('>II', buffer)
             postlistBuffer = f.read(postlen)
-            return IndexSerializer.deserialize(postlistBuffer)
+            return IndexSerializer.deserialize(postlistBuffer, True, 0, True)
 
     def find_anchor_item(self, word):
         wordid = self.word2id[word]
@@ -126,9 +128,18 @@ class Indexer(object):
     @:param plists: [pl1, pl2, ...]
     @:return sum_list: [(docid, tfidf_sum)]
     '''
-    def get_tfidf_scores(self, plists):
+    def get_tfidf_scores(self, plists, common_map = None):
         tfidf_dict = {}
-        for i in plists:
+        if common_map: # document-based
+            n = len(self.docid2url)
+            for k, idxlist in common_map.items():
+                tfsum = 0
+                for pi, idx in enumerate(idxlist):
+                    tfsum += plists[pi][idx].tf * math.log10(n / len(plists[pi]))
+                tfidf_dict[k] = tfsum
+            return tfidf_dict
+
+        for i in plists: # term based
             tfidf_dict = self._term_tfidf(i, tfidf_dict)
         return tfidf_dict
         # return self._transform_score_format(tfidf_dict)
@@ -281,18 +292,25 @@ class Indexer(object):
         return score_dict
 
     def get_result(self, words): # called by app
-        plists = [self.find_index_item(w) for w in words] # [(skipdict, plist)]
-        skipdicts = [a[0] for a in plists]
-        plists = [a[1] for a in plists]
+        T1 = time.clock()
+        plists = [self.find_index_item(w)[1] for w in words] # [(skipdict, plist)]
+        T2 = time.clock()
 
-        score_dict = self.get_tfidf_scores(plists) # dict(docid->tfidf)
+        score_dict = {} # self.get_tfidf_scores(plists) # dict(docid->tfidf)
 
+        T3 = time.clock()
         common_map = self.and_posting_lists_fast(plists) # dict(docid->list[idx])
+        T4 = time.clock()
+        self.logger.info(f'common map: {len(common_map)}')
         if common_map and len(words) > 1:
+            score_dict = self.get_tfidf_scores(plists, common_map)
             window_sizes = self.within_window(plists, common_map) # dict(docid->list[window_size])
             # print(window_sizes)
             for docid, wsize in window_sizes.items():
                 score_dict[docid] += self.window_weight / max(1, wsize - len(words))
+        else:
+            score_dict = self.get_tfidf_scores(plists)
+        T5 = time.clock()
         
         # anchor score
         plists = list(filter(lambda x: x is not None, (self.find_anchor_item(w) for w in words)))
@@ -302,21 +320,23 @@ class Indexer(object):
                 score_dict[docid] += score * self.anchor_weight
             else:
                 score_dict[docid] = score * self.anchor_weight
-        
+        T6 = time.clock()
+
         # page rank score
         for docid in score_dict:
             score_dict[docid] += self.docid2url[docid].rankscore * self.pagerank_weight
-
+        self.logger.info(f'score dict: {len(score_dict)}')
+        T7 = time.clock()
         # top-k
         hp = []
         for docid, score in score_dict.items():
-            heapq.heappush(hp, (score, docid))
-            if len(hp) > self.topk:
-                heapq.heappop(hp)
-        res = [None] * len(hp)
-        while hp:
+            heapq.heappush(hp, (-score, docid))
+        res = []
+        while hp and len(res) < self.topk:
             score, docid = heapq.heappop(hp)
-            res[len(hp)] = {"docid": docid, "score": score, "url": self.docid2url[docid].url}
+            res.append( {"docid": docid, "score": -score, "url": self.docid2url[docid].url} )
+        T8 = time.clock()
+        self.logger.info(f'{T2-T1} {T4-T3} {T5-T4} {T6-T5} {T7-T6} {T8-T7}')
         return res
 
 

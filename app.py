@@ -4,7 +4,7 @@ import json
 from indexer import Indexer
 from parse_html import Parser
 from utils import get_logger
-
+import time
 app = Flask(__name__, static_url_path='', 
             static_folder='web/static',
             template_folder='web/templates')
@@ -12,7 +12,7 @@ app = Flask(__name__, static_url_path='',
 
 myIndexer = Indexer('test')
 parser = Parser()
-
+logger = get_logger('APP')
 
 @app.route('/')
 def index():
@@ -32,9 +32,11 @@ def query_api():
     query = data['query']
     query = parser.stem_string(query)
     words = query.split()
-    get_logger('APP').info(query)
+    logger.info(query)
 
+    T1 = time.clock()
     res = myIndexer.get_result(words)
+    logger.info(f'time cost : {(time.clock() - T1) * 1000} ms')
     return json.dumps(res)
     # return json.dumps([{"docid":0, "score":1, "url":"a"},
     # {"docid":1, "score":2, "url":"c"},

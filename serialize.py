@@ -8,13 +8,37 @@ class PLNode:
     def __init__(self, docId, tf, occurrences):
         self.docId = docId
         self.tf = tf
-        self.occurrences = occurrences
+        self._occurrences = occurrences
+        self._occ_buffer = None
+        self._occ_lazy = False
+
+    @property
+    def occurrences(self):
+        if self._occ_lazy:
+            self._occurrences = IndexSerializer.simple_deserialize(self._occ_buffer, list)
+            self._occ_lazy = False
+            self._occ_buffer = None
+        return self._occurrences
+    
+    @occurrences.setter
+    def occurrences(self, a):
+        self._occurrences = a
+        self._occ_buffer = None
+        self._occ_lazy = False
+
+    def set_buffer(self, occ_buffer):
+        self._occ_buffer = occ_buffer
+        self._occ_lazy = True
+
     def __eq__(self, value):
         if self.docId != value.docId:
+            # print('here1')
             return False
         if self.tf != value.tf:
+            # print('here2')
             return False
         if self.occurrences != value.occurrences:
+            # print('here3')
             return False
         return True
 
@@ -45,6 +69,14 @@ class IndexSerializer(object):
     def simple_deserialize(bt, tp, offset = 0):
         if tp == int:
             return struct.unpack_from('>I', bt, offset)[0]
+        if tp == list:
+            l = struct.unpack_from('>I', bt, offset)[0]
+            res = []
+            # print(l)
+            for i in range(l):
+                offset += 4
+                res.append(struct.unpack_from('>I', bt, offset)[0])
+            return res
         raise NotImplementedError
     
     @staticmethod
@@ -76,7 +108,7 @@ class IndexSerializer(object):
         return listByte
 
     @staticmethod
-    def deserialize(byte, with_skip = True, offset = 0):
+    def deserialize(byte, with_skip = True, offset = 0, lazy_occurence = False):
         if with_skip:
             dictLen = struct.unpack_from(">I", byte, offset)[0]
             # dictLen = int.from_bytes(byte[offset: offset + 4], "big")
@@ -100,6 +132,12 @@ class IndexSerializer(object):
             tf = struct.unpack_from('>d', byte, idx)[0]
             idx += 8
             occLen = struct.unpack_from(">I", byte, idx)[0] # int.from_bytes(byte[idx:idx+4], "big")
+            if lazy_occurence:
+                postingList.append(PLNode(docId, tf, None))
+                bytelen = occLen * 4 + 4
+                postingList[-1].set_buffer(byte[idx: idx + bytelen])
+                idx += bytelen
+                continue
             idx += 4
             # print("{0} {1}".format(docId, occLen))
             occurrencelist = []
@@ -138,7 +176,9 @@ if __name__ == "__main__":
     # print(len(pln2.occurrences))
     byte = IndexSerializer.serialize(pl, True)
     # print(byte)
-    _, a = IndexSerializer.deserialize(byte, True)
+    _, a = IndexSerializer.deserialize(byte, True, 0, True)
+    # for i in range(len(a)):
+    #     a[i].occurrences = IndexSerializer.simple_deserialize(a[i].occ_buffer, list)
     print(a == pl)
 
     import bisect
