@@ -8,6 +8,10 @@ import heapq
 import math
 import bisect
 import time
+
+def bm25_score(n, k1, b, tf, df, L):
+    return math.log10((n - df + 0.5) / (df+0.5)) * (k1+1) * tf / ((1 - b + L / b) * k1 + tf)
+
 def time_to_ms(number):
     return number * 1000
 class DocInfo(object):
@@ -24,6 +28,8 @@ class Indexer(object):
         self.window_weight = 5
         self.pagerank_weight = 180
         self.topk = 200
+        self.k1 = 1.2
+        self.bm25_b = 0.75
         self.file_prefix = file_prefix
         self._load_index()
 
@@ -57,6 +63,8 @@ class Indexer(object):
         self.logger.info(f'num doc: {len(self.docid2url)}, doc avg len: {self.avg_length}, num words: {len(self.word2id)}, {len(self.wid2offsets)}')
 
     def find_index_item(self, word):
+        if word not in self.word2id:
+            return []
         wordid = self.word2id[word]
         offset = self.wid2offsets[wordid][0]
         with open(f'{self.file_prefix}.invert.idx', 'rb') as f:
@@ -135,7 +143,7 @@ class Indexer(object):
             for k, idxlist in common_map.items():
                 tfsum = 0
                 for pi, idx in enumerate(idxlist):
-                    tfsum += plists[pi][idx].tf * math.log10(n / len(plists[pi]))
+                    tfsum += plists[pi][idx].tf * math.log10(n / (len(plists[pi])+1))
                 tfidf_dict[k] = tfsum
             return tfidf_dict
 
@@ -143,7 +151,22 @@ class Indexer(object):
             tfidf_dict = self._term_tfidf(i, tfidf_dict)
         return tfidf_dict
         # return self._transform_score_format(tfidf_dict)
+    
+    def get_bm25_scores(self, plists, common_map = None):
+        bm25_dict = {}
+        if common_map: # document-based
+            n = len(self.docid2url)
+            for k, idxlist in common_map.items():
+                tfsum = 0
+                for pi, idx in enumerate(idxlist):
+                    tfsum += bm25_score(n, self.k1, self.bm25_b, plists[pi][idx].tf, len(plists[pi]), self.avg_length)
+                bm25_dict[k] = tfsum
+            return bm25_dict
 
+        for i in plists: # term based
+            bm25_dict = self._term_bm25(i, bm25_dict)
+        return bm25_dict
+    
     '''
     calculate tf-idf term-at-a-time
 
@@ -151,20 +174,31 @@ class Indexer(object):
     @:param dict: tfidf_dict(k: docid, v: tfidf_sum)
     @:return: tfidf_dict
     '''
-
     def _term_tfidf(self, pl, dict):
         n = len(self.docid2url)
         for i in pl:
             docid = i.docId
             tf = i.tf
             doc_num = len(pl)
-            tfidf = tf * math.log10(n / doc_num)
+            tfidf = tf * math.log10(n / (doc_num+1))
             if docid not in dict:
                 dict[docid] = tfidf
             else:
                 dict[docid] += tfidf
         return dict
-
+    
+    def _term_bm25(self, pl, dict):
+        n = len(self.docid2url)
+        for i in pl:
+            docid = i.docId
+            tf = i.tf
+            doc_num = len(pl)
+            tfidf = bm25_score(n, self.k1, self.bm25_b, tf, doc_num, self.avg_length)
+            if docid not in dict:
+                dict[docid] = tfidf
+            else:
+                dict[docid] += tfidf
+        return dict
     '''
     calculate the sum of tf-idf for each doc
 
@@ -215,7 +249,7 @@ class Indexer(object):
             return a
 
         if len(plists) <= 1:
-            return plists
+            return None
 
         # initialize cand
         maxId = -1
@@ -249,7 +283,7 @@ class Indexer(object):
 
     def and_posting_lists(self, plists, skipdicts = None): # return docId->list(idx)
         if len(plists) <= 1:
-            return plists
+            return None
         counter = Counter()
         indexdict = defaultdict(list)
         for i, d in enumerate(plists[0]):
@@ -301,15 +335,16 @@ class Indexer(object):
         T3 = time.clock()
         common_map = self.and_posting_lists_fast(plists) # dict(docid->list[idx])
         T4 = time.clock()
-        self.logger.info(f'common map: {len(common_map)}')
+        
+        # score_dict = self.get_tfidf_scores(plists, common_map)
+        score_dict = self.get_bm25_scores(plists, common_map)
         if common_map and len(words) > 1:
-            score_dict = self.get_tfidf_scores(plists, common_map)
+            self.logger.info(f'common map: {len(common_map)}')
             window_sizes = self.within_window(plists, common_map) # dict(docid->list[window_size])
             # print(window_sizes)
             for docid, wsize in window_sizes.items():
                 score_dict[docid] += self.window_weight / max(1, wsize - len(words))
-        else:
-            score_dict = self.get_tfidf_scores(plists)
+            
         T5 = time.clock()
         
         # anchor score

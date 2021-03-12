@@ -31,7 +31,7 @@ def query_api():
     data = flask.request.get_json()
     query = data['query']
     query = parser.stem_string(query)
-    words = query.split()
+    words = set(query.split())
     logger.info(query)
 
     T1 = time.clock()
